@@ -237,6 +237,8 @@ export function buildSearchExtractJs(webHost) {
             el.querySelector('a[href*="/explore/"]') ||
             el.querySelector('a[href*="/note/"]');
           const authorLinkEl = el.querySelector('a.author, a[href*="/user/profile/"]');
+          const coverImg = detailLinkEl?.querySelector('img');
+          const coverUrl = coverImg ? cleanText(coverImg.getAttribute('src') || '') : '';
 
           const url = normalizeUrl(detailLinkEl?.getAttribute('href') || '');
           if (!url) continue;
@@ -260,6 +262,7 @@ export function buildSearchExtractJs(webHost) {
             likes: cleanText(likesEl?.textContent || '0'),
             url,
             author_url: normalizeUrl(authorLinkEl?.getAttribute('href') || ''),
+            cover: coverUrl,
           });
         }
 

@@ -43,7 +43,14 @@ export const NOTE_EXTRACT_JS = `
           if (t) tags.push(t)
         })
 
-        return { pageUrl: location.href, securityBlock, loginWall, notFound, title, desc, author, likes, collects, comments, tags }
+        // Extract all note images
+        const images = []
+        document.querySelectorAll('.carousel img, .swiper-slide img, .note-image img, .images-container img, [class*="slide"] img').forEach(el => {
+          const src = el.getAttribute('src') || el.getAttribute('data-src') || ''
+          if (src && !images.includes(src)) images.push(src)
+        })
+
+        return { pageUrl: location.href, securityBlock, loginWall, notFound, title, desc, author, likes, collects, comments, tags, images }
       })()
     `;
 export const command = cli({
@@ -98,6 +105,9 @@ export const command = cli({
         ];
         if (d.tags?.length) {
             rows.push({ field: 'tags', value: d.tags.join(', ') });
+        }
+        if (d.images?.length) {
+            rows.push({ field: 'images', value: JSON.stringify(d.images) });
         }
         return rows;
     },
