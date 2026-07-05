@@ -15,7 +15,8 @@ import { parseNoteId, buildNoteUrl } from './note-helpers.js';
  * exact same selector set without copying it.
  */
 export const NOTE_EXTRACT_JS = `
-      (() => {
+      (async () => {
+        const wait = (ms) => new Promise(r => setTimeout(r, ms))
         const bodyText = document.body?.innerText || ''
         const loginWall = /登录后查看|请登录/.test(bodyText)
         const notFound = /页面不见了|笔记不存在|无法浏览/.test(bodyText)
@@ -50,7 +51,31 @@ export const NOTE_EXTRACT_JS = `
           if (src && !images.includes(src)) images.push(src)
         })
 
-        return { pageUrl: location.href, securityBlock, loginWall, notFound, title, desc, author, likes, collects, comments, tags, images }
+        // Scroll to trigger comment lazy loading
+        const scroller = document.querySelector('.note-scroller') || document.querySelector('.container')
+        if (scroller) {
+          for (let i = 0; i < 5; i++) {
+            const before = scroller.querySelectorAll('.parent-comment').length
+            scroller.scrollTo(0, scroller.scrollHeight)
+            await new Promise(r => setTimeout(r, 800 + Math.random() * 1200))
+            const after = scroller.querySelectorAll('.parent-comment').length
+            if (after <= before) break
+          }
+        }
+
+        // Extract top-level comments from the DOM
+        const commentsList = []
+        document.querySelectorAll('.parent-comment').forEach(p => {
+          const item = p.querySelector('.comment-item')
+          if (!item) return
+          const author = clean(item.querySelector('.author-wrapper .name, .user-name'))
+          const text = clean(item.querySelector('.content, .note-text'))
+          const likes = clean(item.querySelector('.count'))
+          const time = clean(item.querySelector('.date, .time'))
+          if (text) commentsList.push({ author, text, likes, time })
+        })
+
+        return { pageUrl: location.href, securityBlock, loginWall, notFound, title, desc, author, likes, collects, comments, tags, images, commentsList }
       })()
     `;
 export const command = cli({
@@ -69,46 +94,57 @@ export const command = cli({
         const raw = String(kwargs['note-id']);
         const noteId = parseNoteId(raw);
         const url = buildNoteUrl(raw, { commandName: 'xiaohongshu note' });
-        await page.goto(url);
-        await page.wait({ time: 2 + Math.random() * 3 });
-        const data = await page.evaluate(NOTE_EXTRACT_JS);
-        if (!data || typeof data !== 'object') {
-            throw new EmptyResultError('xiaohongshu/note', 'Unexpected evaluate response');
+        // Use a dedicated tab so we don't interfere with the user's search tab
+        const savedPage = page._page;
+        const newTabId = await page.newTab(url);
+        page._page = newTabId;
+        try {
+            await page.wait({ time: 2 + Math.random() * 3 });
+            const data = await page.evaluate(NOTE_EXTRACT_JS);
+            if (!data || typeof data !== 'object') {
+                throw new EmptyResultError('xiaohongshu/note', 'Unexpected evaluate response');
+            }
+            if (data.securityBlock) {
+                throw new CliError('SECURITY_BLOCK', 'Xiaohongshu security block: the note detail page was blocked by risk control.', /^https?:\/\//.test(raw)
+                    ? 'The page may be temporarily restricted. Try again later or from a different session.'
+                    : 'Try using a full URL from search results (with xsec_token) instead of a bare note ID.');
+            }
+            if (data.loginWall) {
+                throw new AuthRequiredError('www.xiaohongshu.com', 'Note content requires login');
+            }
+            if (data.notFound) {
+                throw new EmptyResultError('xiaohongshu/note', `Note ${noteId} not found or unavailable — it may have been deleted or restricted`);
+            }
+            const d = data;
+            // XHS renders placeholder text like "赞"/"收藏"/"评论" when count is 0;
+            // normalize to '0' unless the value looks numeric.
+            const numOrZero = (v) => /^\d+/.test(v) ? v : '0';
+            // Title + author are always present on a real note page.
+            // If both are missing, the page likely failed to load properly.
+            if (!d.title && !d.author) {
+                throw new EmptyResultError('xiaohongshu/note', 'The note page loaded without visible content. The note may be deleted or restricted.');
+            }
+            const rows = [
+                { field: 'title', value: d.title || '' },
+                { field: 'author', value: d.author || '' },
+                { field: 'content', value: d.desc || '' },
+                { field: 'likes', value: numOrZero(d.likes || '') },
+                { field: 'collects', value: numOrZero(d.collects || '') },
+                { field: 'comments', value: numOrZero(d.comments || '') },
+            ];
+            if (d.tags?.length) {
+                rows.push({ field: 'tags', value: d.tags.join(', ') });
+            }
+            if (d.images?.length) {
+                rows.push({ field: 'images', value: JSON.stringify(d.images) });
+            }
+            if (d.commentsList?.length) {
+                rows.push({ field: 'comments_list', value: JSON.stringify(d.commentsList) });
+            }
+            return rows;
+        } finally {
+            await page.closeTab(newTabId).catch(() => {});
+            page._page = savedPage;
         }
-        if (data.securityBlock) {
-            throw new CliError('SECURITY_BLOCK', 'Xiaohongshu security block: the note detail page was blocked by risk control.', /^https?:\/\//.test(raw)
-                ? 'The page may be temporarily restricted. Try again later or from a different session.'
-                : 'Try using a full URL from search results (with xsec_token) instead of a bare note ID.');
-        }
-        if (data.loginWall) {
-            throw new AuthRequiredError('www.xiaohongshu.com', 'Note content requires login');
-        }
-        if (data.notFound) {
-            throw new EmptyResultError('xiaohongshu/note', `Note ${noteId} not found or unavailable — it may have been deleted or restricted`);
-        }
-        const d = data;
-        // XHS renders placeholder text like "赞"/"收藏"/"评论" when count is 0;
-        // normalize to '0' unless the value looks numeric.
-        const numOrZero = (v) => /^\d+/.test(v) ? v : '0';
-        // Title + author are always present on a real note page.
-        // If both are missing, the page likely failed to load properly.
-        if (!d.title && !d.author) {
-            throw new EmptyResultError('xiaohongshu/note', 'The note page loaded without visible content. The note may be deleted or restricted.');
-        }
-        const rows = [
-            { field: 'title', value: d.title || '' },
-            { field: 'author', value: d.author || '' },
-            { field: 'content', value: d.desc || '' },
-            { field: 'likes', value: numOrZero(d.likes || '') },
-            { field: 'collects', value: numOrZero(d.collects || '') },
-            { field: 'comments', value: numOrZero(d.comments || '') },
-        ];
-        if (d.tags?.length) {
-            rows.push({ field: 'tags', value: d.tags.join(', ') });
-        }
-        if (d.images?.length) {
-            rows.push({ field: 'images', value: JSON.stringify(d.images) });
-        }
-        return rows;
     },
 });

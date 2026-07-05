@@ -34,6 +34,7 @@ async function verifyXhsIdentity(page) {
   return {
     username: data.name ?? '',
     followers: data.fans_count ?? 0,
+    avatar_url: data.avatar ?? '',
   };
 }
 
@@ -41,7 +42,7 @@ registerSiteAuthCommands({
   site: 'xiaohongshu',
   domain: 'creator.xiaohongshu.com',
   loginUrl: 'https://creator.xiaohongshu.com/',
-  columns: ['username', 'followers'],
+  columns: ['username', 'followers', 'avatar_url'],
   quickCheck: hasXhsSessionCookies,
   verify: verifyXhsIdentity,
   poll: async (page) => {

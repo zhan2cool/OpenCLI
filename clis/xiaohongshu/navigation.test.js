@@ -4,6 +4,7 @@ import './note.js';
 import './comments.js';
 import './download.js';
 import './search.js';
+import './user-search.js';
 import './user.js';
 import './publish.js';
 import './creator-notes.js';
@@ -20,6 +21,7 @@ describe('xiaohongshu navigateBefore hardening', () => {
         'xiaohongshu/comments',
         'xiaohongshu/download',
         'xiaohongshu/search',
+        'xiaohongshu/user-search',
         'xiaohongshu/user',
         'xiaohongshu/saved',
         'xiaohongshu/liked',

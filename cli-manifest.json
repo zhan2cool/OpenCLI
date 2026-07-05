@@ -40993,7 +40993,8 @@
       "logged_in",
       "site",
       "username",
-      "followers"
+      "followers",
+      "avatar_url"
     ],
     "type": "js",
     "modulePath": "xiaohongshu/auth.js",
@@ -41204,6 +41205,36 @@
   },
   {
     "site": "xiaohongshu",
+    "name": "search-more",
+    "description": "在现有搜索页继续滚动并获取更多笔记",
+    "access": "read",
+    "domain": "www.xiaohongshu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 50,
+        "required": false,
+        "help": "目标笔记数量"
+      }
+    ],
+    "columns": [
+      "rank",
+      "title",
+      "author",
+      "likes",
+      "published_at",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "xiaohongshu/search.js",
+    "sourceFile": "xiaohongshu/search.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "xiaohongshu",
     "name": "unfollow",
     "description": "取消关注小红书用户 (profile UI automation)",
     "access": "write",
@@ -41267,6 +41298,46 @@
   },
   {
     "site": "xiaohongshu",
+    "name": "user-search",
+    "description": "搜索小红书用户/博主",
+    "access": "read",
+    "domain": "www.xiaohongshu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "query",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "User keyword"
+      },
+      {
+        "name": "limit",
+        "type": "int",
+        "default": 10,
+        "required": false,
+        "help": "Number of results"
+      }
+    ],
+    "columns": [
+      "rank",
+      "name",
+      "user_id",
+      "fans",
+      "notes_count",
+      "xiaohongshu_id",
+      "tag",
+      "followed",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "xiaohongshu/user-search.js",
+    "sourceFile": "xiaohongshu/user-search.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "xiaohongshu",
     "name": "whoami",
     "description": "Show the current logged-in xiaohongshu account",
     "access": "read",
@@ -41278,7 +41349,8 @@
       "logged_in",
       "site",
       "username",
-      "followers"
+      "followers",
+      "avatar_url"
     ],
     "type": "js",
     "modulePath": "xiaohongshu/auth.js",

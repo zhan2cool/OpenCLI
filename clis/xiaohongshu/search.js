@@ -155,7 +155,7 @@ export function buildScrollUntilJs(targetCount, maxScrolls = 15) {
               if (document.body.scrollHeight > lastHeight) {
                 clearTimeout(to);
                 ob.disconnect();
-                setTimeout(resolve, 200);
+                setTimeout(resolve, 1500);
               }
             });
             ob.observe(document.body, { childList: true, subtree: true });
@@ -328,6 +328,28 @@ export const command = cli({
         }));
     },
 });
+export const searchMoreCommand = cli({
+    site: 'xiaohongshu',
+    name: 'search-more',
+    access: 'read',
+    description: '在现有搜索页继续滚动并获取更多笔记',
+    domain: 'www.xiaohongshu.com',
+    strategy: Strategy.COOKIE,
+    navigateBefore: false,
+    args: [
+        { name: 'limit', type: 'int', default: 50, help: '目标笔记数量' },
+    ],
+    columns: ['rank', 'title', 'author', 'likes', 'published_at', 'url'],
+    func: async (page, kwargs) => {
+        const limit = parseLimit(kwargs.limit);
+        await page.evaluate(buildScrollUntilJs(limit));
+        const payload = requireSearchRows(await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'post-scroll extraction');
+        return payload.filter((item) => item.title).slice(0, limit).map((item, i) => ({
+            rank: i + 1, ...item, published_at: noteIdToDate(item.url),
+        }));
+    },
+});
+
 export const __test__ = {
     stripXhsAuthorDateSuffix,
 };
