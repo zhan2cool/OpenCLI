@@ -44,12 +44,43 @@ export const NOTE_EXTRACT_JS = `
           if (t) tags.push(t)
         })
 
-        // Extract all note images
+        // Extract all note images — try DOM selectors first, fall back to __INITIAL_STATE__
         const images = []
         document.querySelectorAll('.carousel img, .swiper-slide img, .note-image img, .images-container img, [class*="slide"] img').forEach(el => {
           const src = el.getAttribute('src') || el.getAttribute('data-src') || ''
           if (src && !images.includes(src)) images.push(src)
         })
+        // Fallback: __INITIAL_STATE__ (covers lazy-loaded images and video covers)
+        var _fallbackDebug = '';
+        if (images.length === 0) {
+          try {
+            var _hasState = document.body.innerHTML.indexOf('__INITIAL_STATE__') >= 0;
+            var _match = document.body.innerHTML.match(/window\\.__INITIAL_STATE__\\s*=\\s*(\\{.+?\\})<\\/script>/)
+            _fallbackDebug = 'hasState=' + _hasState + ' regex=' + (_match ? 'ok' : 'nomatch');
+            if (_match) {
+              var _state = JSON.parse(JSON.stringify(eval('(' + _match[1] + ')')))
+              var _nm = _state && _state.note && _state.note.noteDetailMap
+              _fallbackDebug += ' noteMapKeys=' + (_nm ? Object.keys(_nm).join(',') : 'null');
+              if (_nm) {
+                var _keys = Object.keys(_nm)
+                if (_keys.length) {
+                  var _note = _nm[_keys[0]] && _nm[_keys[0]].note || {}
+                  _fallbackDebug += ' imageListLen=' + ((_note.imageList || []).length);
+                  ;(_note.imageList || []).forEach(function(i) {
+                    var src = i.url || i.url_default || i.urlDefault || i.url_pre || i.urlPre || i.src || ''
+                    if (src && images.indexOf(src) === -1) images.push(src)
+                  })
+                  if (images.length === 0 && _note.video && _note.video.cover) {
+                    var vc = _note.video.cover
+                    var src = vc.url || vc.url_default || vc.url_pre || ''
+                    if (src) images.push(src)
+                    _fallbackDebug += ' videoCover=' + (src ? 'ok' : 'empty');
+                  }
+                }
+              }
+            }
+          } catch (e) { _fallbackDebug += ' error=' + e.message; }
+        }
 
         // Scroll to trigger comment lazy loading
         const scroller = document.querySelector('.note-scroller') || document.querySelector('.container')
@@ -75,7 +106,11 @@ export const NOTE_EXTRACT_JS = `
           if (text) commentsList.push({ author, text, likes, time })
         })
 
-        return { pageUrl: location.href, securityBlock, loginWall, notFound, title, desc, author, likes, collects, comments, tags, images, commentsList }
+        var _noteType = document.querySelector('#noteContainer,[class*=note-container]');
+        var _type = _noteType ? (_noteType.getAttribute('data-type') || '') : '';
+        if (!_type) _type = document.querySelector('video') ? 'video' : (images.length ? 'normal' : '');
+        if (_fallbackDebug.indexOf('videoCover=ok') >= 0) _type = 'video';
+        return { pageUrl: location.href, securityBlock, loginWall, notFound, title, desc, author, likes, collects, comments, tags, images, commentsList, type: _type, _fallbackDebug }
       })()
     `;
 export const command = cli({
@@ -132,6 +167,9 @@ export const command = cli({
                 { field: 'collects', value: numOrZero(d.collects || '') },
                 { field: 'comments', value: numOrZero(d.comments || '') },
             ];
+            if (d.type) {
+                rows.push({ field: 'type', value: d.type });
+            }
             if (d.tags?.length) {
                 rows.push({ field: 'tags', value: d.tags.join(', ') });
             }
@@ -140,6 +178,9 @@ export const command = cli({
             }
             if (d.commentsList?.length) {
                 rows.push({ field: 'comments_list', value: JSON.stringify(d.commentsList) });
+            }
+            if (d._fallbackDebug) {
+                rows.push({ field: '_debug_images', value: d._fallbackDebug });
             }
             return rows;
         } finally {
