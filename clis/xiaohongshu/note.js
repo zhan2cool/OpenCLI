@@ -46,7 +46,7 @@ export const NOTE_EXTRACT_JS = `
 
         // Extract all note images — try DOM selectors first, fall back to __INITIAL_STATE__
         const images = []
-        document.querySelectorAll('.carousel img, .swiper-slide img, .note-image img, .images-container img, [class*="slide"] img').forEach(el => {
+        document.querySelectorAll('.carousel img, .swiper-slide:not(.swiper-slide-duplicate) img, .note-image img, .images-container img, [class*="slide"] img').forEach(el => {
           const src = el.getAttribute('src') || el.getAttribute('data-src') || ''
           if (src && !images.includes(src)) images.push(src)
         })
