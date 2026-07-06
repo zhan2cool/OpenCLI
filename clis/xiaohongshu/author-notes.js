@@ -459,7 +459,7 @@ export const command = cli({
         if (collected.length >= limit) break;
         if (seenSet.has(n.id)) continue;
 
-        const note = await clickNoteAndExtract(page, n.id);
+        const note = await collectNote(n);
         if (note) {
           collected.push(note);
           seenSet.add(n.id);
