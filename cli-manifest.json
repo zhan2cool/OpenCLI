@@ -41267,27 +41267,63 @@
   {
     "site": "xiaohongshu",
     "name": "search-more",
-    "description": "在现有搜索页继续滚动并获取更多笔记",
+    "description": "搜索或续采小红书笔记（支持筛选）",
     "access": "read",
     "domain": "www.xiaohongshu.com",
     "strategy": "cookie",
     "browser": true,
     "args": [
       {
+        "name": "query",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "positional": true,
+        "help": "搜索关键词（第1页必填）"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "页码"
+      },
+      {
         "name": "limit",
         "type": "int",
-        "default": 50,
+        "default": 30,
         "required": false,
         "help": "目标笔记数量"
+      },
+      {
+        "name": "note-type",
+        "type": "string",
+        "default": "all",
+        "required": false,
+        "help": "笔记类型: all/image/video"
+      },
+      {
+        "name": "time",
+        "type": "string",
+        "default": "all",
+        "required": false,
+        "help": "发布时间: all/last_one_day/last_one_week/last_half_year"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "default": "general",
+        "required": false,
+        "help": "排序: general/latest/most_liked/most_commented"
       }
     ],
     "columns": [
-      "rank",
       "title",
       "author",
       "likes",
-      "published_at",
-      "url"
+      "type",
+      "url",
+      "cover"
     ],
     "type": "js",
     "modulePath": "xiaohongshu/search.js",

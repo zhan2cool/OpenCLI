@@ -328,25 +328,170 @@ export const command = cli({
         }));
     },
 });
+const FILTER_SORT = { general: '综合', latest: '最新', most_liked: '最多点赞', most_commented: '最多评论' };
+const FILTER_TIME = { all: '不限', last_one_day: '一天内', last_one_week: '一周内', last_half_year: '半年内' };
+
 export const searchMoreCommand = cli({
     site: 'xiaohongshu',
     name: 'search-more',
     access: 'read',
-    description: '在现有搜索页继续滚动并获取更多笔记',
+    description: '搜索或续采小红书笔记（支持筛选）',
     domain: 'www.xiaohongshu.com',
     strategy: Strategy.COOKIE,
     navigateBefore: false,
     args: [
-        { name: 'limit', type: 'int', default: 50, help: '目标笔记数量' },
+        { name: 'query', type: 'string', default: '', positional: true, help: '搜索关键词（第1页必填）' },
+        { name: 'page', type: 'int', default: 1, help: '页码' },
+        { name: 'limit', type: 'int', default: 30, help: '目标笔记数量' },
+        { name: 'note-type', type: 'string', default: 'all', help: '笔记类型: all/image/video' },
+        { name: 'time', type: 'string', default: 'all', help: '发布时间: all/last_one_day/last_one_week/last_half_year' },
+        { name: 'sort', type: 'string', default: 'general', help: '排序: general/latest/most_liked/most_commented' },
     ],
-    columns: ['rank', 'title', 'author', 'likes', 'published_at', 'url'],
+    columns: ['title', 'author', 'likes', 'type', 'url', 'cover'],
     func: async (page, kwargs) => {
+        const pageNum = Math.max(1, Number(kwargs.page ?? 1));
         const limit = parseLimit(kwargs.limit);
+        const isFirst = pageNum === 1;
+
+        if (isFirst) {
+            const kw = String(kwargs.query || '').trim();
+            if (!kw) throw new ArgumentError('query is required for page 1');
+
+            const url = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(kw)}&source=web_search_result_notes`;
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            const waitResult = unwrapEvaluateResult(await page.evaluate(WAIT_FOR_CONTENT_JS));
+            if (waitResult === 'login_wall') {
+                throw new AuthRequiredError('www.xiaohongshu.com', '搜索需要登录');
+            }
+
+            const noteType = String(kwargs['note-type'] || 'all');
+            if (noteType === 'image' || noteType === 'video') {
+                const sel = '#' + noteType + '.channel';
+                await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.click(); }, sel);
+                await page.wait(1500);
+            }
+
+            const sort = String(kwargs.sort || 'general');
+            const time = String(kwargs.time || 'all');
+            if (sort !== 'general' || time !== 'all') {
+                await page.evaluate(() => {
+                    const btn = document.querySelector('.filter');
+                    if (btn) {
+                        ['mouseenter', 'mouseover', 'click'].forEach(t => btn.dispatchEvent(new MouseEvent(t, { bubbles: true })));
+                    }
+                });
+                await page.wait(500);
+                if (sort !== 'general') {
+                    const label = FILTER_SORT[sort];
+                    if (label) {
+                        await page.evaluate((gi, lbl) => {
+                            const groups = document.querySelectorAll('.filter-panel .filters');
+                            const group = groups[gi];
+                            if (!group) return;
+                            for (const t of group.querySelectorAll('.tags')) {
+                                if ((t.textContent || '').trim() === lbl) { t.click(); return; }
+                            }
+                        }, 0, label);
+                        await page.wait(600);
+                    }
+                }
+                if (time !== 'all') {
+                    const label = FILTER_TIME[time];
+                    if (label) {
+                        await page.evaluate((gi, lbl) => {
+                            const groups = document.querySelectorAll('.filter-panel .filters');
+                            const group = groups[gi];
+                            if (!group) return;
+                            for (const t of group.querySelectorAll('.tags')) {
+                                if ((t.textContent || '').trim() === lbl) { t.click(); return; }
+                            }
+                        }, 2, label);
+                        await page.wait(600);
+                    }
+                }
+                await page.evaluate(() => {
+                    const op = document.querySelector('.operation');
+                    if (op && (op.textContent || '').trim().includes('收起')) op.click();
+                });
+                await page.wait(800);
+            }
+
+            const initialPayload = requireSearchRows(
+                await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'initial extraction'
+            );
+            const payload = [...initialPayload];
+            if (payload.length < limit) {
+                await page.evaluate(buildScrollUntilJs(limit));
+                const scrolled = requireSearchRows(
+                    await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'scroll extraction'
+                );
+                const seen = new Set(payload.map(i => i.url).filter(Boolean));
+                for (const item of scrolled) {
+                    if (item?.url && seen.has(item.url)) continue;
+                    if (item?.url) seen.add(item.url);
+                    payload.push(item);
+                    if (payload.length >= limit) break;
+                }
+            }
+
+            const ids = payload.map(i => i.url).filter(Boolean);
+            await page.evaluate((keyword, initIds) => {
+                window.__xhsSearch = { keyword, uniqIds: initIds, page: 1 };
+            }, kw, ids);
+            if (ids.length > 200) {
+                await page.evaluate(() => {
+                    const s = window.__xhsSearch;
+                    if (s) s.uniqIds = s.uniqIds.slice(-200);
+                });
+            }
+
+            const items = payload.filter(i => i.title).slice(0, limit);
+            return { items, page: 1, has_more: items.length >= limit };
+        }
+
+        const state = await page.evaluate(() => {
+            const s = window.__xhsSearch;
+            return s ? { keyword: s.keyword, uniqIds: s.uniqIds } : null;
+        });
+        if (!state) {
+            throw new CommandExecutionError('搜索会话已过期，请重新从第1页开始搜索');
+        }
+        const curUrl = await page.evaluate(() => window.location.href);
+        if (!curUrl.includes('search_result')) {
+            throw new CommandExecutionError('搜索页面已变化，请重新搜索');
+        }
+
         await page.evaluate(buildScrollUntilJs(limit));
-        const payload = requireSearchRows(await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'post-scroll extraction');
-        return payload.filter((item) => item.title).slice(0, limit).map((item, i) => ({
-            rank: i + 1, ...item, published_at: noteIdToDate(item.url),
-        }));
+        const payload = requireSearchRows(
+            await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'scroll extraction'
+        );
+
+        const seenSet = new Set(state.uniqIds);
+        const newItems = [];
+        for (const item of payload) {
+            const key = item.url;
+            if (!key || seenSet.has(key)) continue;
+            seenSet.add(key);
+            newItems.push(item);
+            if (newItems.length >= limit) break;
+        }
+
+        const newIds = newItems.map(i => i.url).filter(Boolean);
+        if (newIds.length > 0) {
+            await page.evaluate((addIds) => {
+                const s = window.__xhsSearch;
+                if (!s) return;
+                for (const id of addIds) {
+                    if (!s.uniqIds.includes(id)) {
+                        s.uniqIds.push(id);
+                        if (s.uniqIds.length > 200) s.uniqIds = s.uniqIds.slice(-200);
+                    }
+                }
+            }, newIds);
+        }
+
+        const items = newItems.filter(i => i.title).slice(0, limit);
+        return { items, page: pageNum, has_more: items.length >= limit };
     },
 });
 
