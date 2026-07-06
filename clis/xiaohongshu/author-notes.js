@@ -251,8 +251,20 @@ async function clickNoteAndExtract(page, noteId) {
   const noteUrl = clickResult.url || `https://www.xiaohongshu.com/explore/${noteId}`;
   await page.wait(200 + Math.random() * 300);
   await page.nativeClick(clickResult.x, clickResult.y);
+  await page.wait(800);
 
-  await page.wait(3000);
+  let hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+  if (!hasPopup) {
+    await page.evaluate(() => window.scrollBy(0, -80));
+    await page.wait(300);
+    await page.nativeClick(clickResult.x, clickResult.y + 40);
+    await page.wait(1200);
+    hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+  }
+
+  if (!hasPopup) {
+    await page.wait(2000);
+  }
 
   const detail = await page.evaluate(EXTRACT_NOTE_JS);
   if (!detail) return null;
