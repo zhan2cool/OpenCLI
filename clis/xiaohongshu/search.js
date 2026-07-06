@@ -413,30 +413,54 @@ export const searchMoreCommand = cli({
                 }
             }
 
-            const initialPayload = requireSearchRows(
-                await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'initial extraction'
-            );
-            const payload = [...initialPayload];
-            if (payload.length < limit) {
-                await page.evaluate(buildScrollUntilJs(limit));
-                const scrolled = requireSearchRows(
-                    await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'scroll extraction'
+            const seenSet = new Set();
+            const allItems = [];
+            let scrollCount = 0;
+            let noNewCount = 0;
+            const MAX_SCROLL = 20;
+
+            while (allItems.length < limit && scrollCount < MAX_SCROLL) {
+                const payload = requireSearchRows(
+                    await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'extraction'
                 );
-                const seen = new Set(payload.map(i => i.url).filter(Boolean));
-                for (const item of scrolled) {
-                    if (item?.url && seen.has(item.url)) continue;
-                    if (item?.url) seen.add(item.url);
-                    payload.push(item);
-                    if (payload.length >= limit) break;
+
+                let newInBatch = 0;
+                for (const item of payload) {
+                    const key = item.url;
+                    if (!key || seenSet.has(key)) continue;
+                    seenSet.add(key);
+                    allItems.push(item);
+                    newInBatch++;
+                    if (allItems.length >= limit) break;
                 }
+
+                if (allItems.length >= limit) break;
+
+                const ended = await page.evaluate(() => {
+                    const end = document.querySelector('.end-container.status-container');
+                    return !!(end && (end.textContent || '').includes('THE END'));
+                });
+                if (ended) break;
+
+                if (newInBatch === 0) {
+                    noNewCount++;
+                    if (noNewCount >= 5) break;
+                } else {
+                    noNewCount = 0;
+                }
+
+                await page.evaluate(() => window.scrollBy(0, 700));
+                await page.wait(1500);
+                scrollCount++;
             }
+
             const hasMore = await page.evaluate(() => {
                 const end = document.querySelector('.end-container.status-container');
                 if (end && (end.textContent || '').includes('THE END')) return false;
                 return document.querySelectorAll('section.note-item, section:has(a[href*="/search_result/"]), section:has(a[href*="/explore/"])').length > 0;
             });
 
-            const ids = payload.map(i => i.url).filter(Boolean);
+            const ids = allItems.map(i => i.url).filter(Boolean);
             await page.evaluate((keyword, initIds) => {
                 window.__xhsSearch = { keyword, uniqIds: initIds, page: 1 };
             }, kw, ids);
@@ -447,7 +471,7 @@ export const searchMoreCommand = cli({
                 });
             }
 
-            const items = payload.filter(i => i.title).slice(0, limit);
+            const items = allItems.filter(i => i.title).slice(0, limit);
             return { items, page: 1, has_more: hasMore };
         }
 
