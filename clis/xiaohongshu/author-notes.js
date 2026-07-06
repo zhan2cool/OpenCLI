@@ -255,19 +255,13 @@ async function clickNoteAndExtract(page, noteId) {
 
   let hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   if (!hasPopup) {
-    await page.evaluate(() => window.scrollBy(0, 200));
-    await page.wait(500);
-    await page.nativeClick(clickResult.x, clickResult.y + 100);
-    await page.wait(1200);
-    hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
-  }
-
-  if (!hasPopup) {
-    await page.evaluate(() => window.scrollBy(0, -400));
-    await page.wait(500);
-    await page.nativeClick(clickResult.x, clickResult.y - 50);
-    await page.wait(1500);
-    hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+    const rect = clickResult;
+    for (const offset of [{ x: 0, y: -40 }, { x: 40, y: 20 }, { x: -30, y: 30 }]) {
+      await page.nativeClick(rect.x + offset.x, rect.y + offset.y);
+      await page.wait(1000);
+      hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+      if (hasPopup) break;
+    }
   }
 
   if (!hasPopup) {
