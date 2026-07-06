@@ -41314,7 +41314,7 @@
         "type": "string",
         "default": "general",
         "required": false,
-        "help": "排序: general/latest/most_liked/most_commented"
+        "help": "排序: general/latest/most_liked/most_commented/most_faved"
       }
     ],
     "columns": [

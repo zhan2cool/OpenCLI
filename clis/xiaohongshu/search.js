@@ -329,7 +329,7 @@ export const command = cli({
         }));
     },
 });
-const FILTER_SORT = { general: '综合', latest: '最新', most_liked: '最多点赞', most_commented: '最多评论' };
+const FILTER_SORT = { general: '综合', latest: '最新', most_liked: '最多点赞', most_commented: '最多评论', most_faved: '最多收藏' };
 const FILTER_TIME = { all: '不限', last_one_day: '一天内', last_one_week: '一周内', last_half_year: '半年内' };
 
 export const searchNotesCommand = cli({
@@ -347,7 +347,7 @@ export const searchNotesCommand = cli({
         { name: 'limit', type: 'int', default: 50, help: '目标笔记数量' },
         { name: 'note-type', type: 'string', default: 'all', help: '笔记类型: all/image/video' },
         { name: 'time', type: 'string', default: 'all', help: '发布时间: all/last_one_day/last_one_week/last_half_year' },
-        { name: 'sort', type: 'string', default: 'general', help: '排序: general/latest/most_liked/most_commented' },
+        { name: 'sort', type: 'string', default: 'general', help: '排序: general/latest/most_liked/most_commented/most_faved' },
     ],
     columns: ['title', 'author', 'likes', 'type', 'url', 'cover'],
     func: async (page, kwargs) => {
