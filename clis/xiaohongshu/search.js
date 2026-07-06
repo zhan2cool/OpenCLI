@@ -466,6 +466,7 @@ export const searchMoreCommand = cli({
         const seenSet = new Set(state.uniqIds);
         const newItems = [];
         let scrollCount = 0;
+        let noNewCount = 0;
         const MAX_SCROLL = 20;
 
         while (newItems.length < limit && scrollCount < MAX_SCROLL) {
@@ -473,16 +474,30 @@ export const searchMoreCommand = cli({
                 await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'scroll extraction'
             );
 
+            let newInBatch = 0;
             for (const item of payload) {
                 const key = item.url;
                 if (!key || seenSet.has(key)) continue;
                 seenSet.add(key);
                 newItems.push(item);
+                newInBatch++;
                 if (newItems.length >= limit) break;
             }
 
             if (newItems.length >= limit) break;
-            if (scrollCount >= MAX_SCROLL) break;
+
+            const ended = await page.evaluate(() => {
+                const end = document.querySelector('.end-container.status-container');
+                return !!(end && (end.textContent || '').includes('THE END'));
+            });
+            if (ended) break;
+
+            if (newInBatch === 0) {
+                noNewCount++;
+                if (noNewCount >= 5) break;
+            } else {
+                noNewCount = 0;
+            }
 
             await page.evaluate(() => window.scrollBy(0, 700));
             await page.wait(1500);
