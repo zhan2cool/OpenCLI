@@ -230,7 +230,7 @@ async function clickNoteAndExtract(page, noteId) {
       const fullUrl = href.startsWith('http') ? href : 'https://www.xiaohongshu.com' + href;
       const card = link.closest('section.note-item') || link.parentElement;
       if (!card) return null;
-      card.scrollIntoView({ block: 'center' });
+      card.scrollIntoView({ block: 'end' });
       void document.body.offsetHeight;
       const rect = card.getBoundingClientRect();
       const cx = Math.floor(rect.x + rect.width / 2) + 1;
@@ -272,7 +272,7 @@ async function clickNoteAndExtract(page, noteId) {
     console.warn('[CLICK_DEBUG] after click rect:', JSON.stringify(afterRect));
   }
 
-  let hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+  hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   if (!hasPopup) {
     const rect = clickResult;
     for (const offset of [{ x: 0, y: -40 }, { x: 40, y: 20 }, { x: -30, y: 30 }]) {
