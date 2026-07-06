@@ -378,22 +378,21 @@ export const searchNotesCommand = cli({
             const sort = String(kwargs.sort || 'general');
             const time = String(kwargs.time || 'all');
             if (sort !== 'general' || time !== 'all') {
-                await page.evaluate(() => {
-                    const btn = document.querySelector('.filter');
-                    if (btn) btn.click();
-                });
-                await page.wait(500);
                 if (sort !== 'general') {
                     const label = FILTER_SORT[sort];
                     if (label) {
                         await page.evaluate((gi, lbl) => {
+                            const btn = document.querySelector('.filter');
+                            if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
                             const groups = document.querySelectorAll('.filter-panel .filters');
                             const group = groups[gi];
                             if (!group) return;
                             for (const t of group.querySelectorAll('.tags')) {
+                                const span = t.querySelector('span');
+                                if (!span) continue;
                                 const style = getComputedStyle(t);
                                 if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                                if ((t.textContent || '').trim() === lbl) { t.click(); return; }
+                                if ((span.textContent || '').trim() === lbl) { span.click(); return; }
                             }
                         }, 0, label);
                         await waitForContent();
@@ -403,13 +402,17 @@ export const searchNotesCommand = cli({
                     const label = FILTER_TIME[time];
                     if (label) {
                         await page.evaluate((gi, lbl) => {
+                            const btn = document.querySelector('.filter');
+                            if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
                             const groups = document.querySelectorAll('.filter-panel .filters');
                             const group = groups[gi];
                             if (!group) return;
                             for (const t of group.querySelectorAll('.tags')) {
+                                const span = t.querySelector('span');
+                                if (!span) continue;
                                 const style = getComputedStyle(t);
                                 if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                                if ((t.textContent || '').trim() === lbl) { t.click(); return; }
+                                if ((span.textContent || '').trim() === lbl) { span.click(); return; }
                             }
                         }, 2, label);
                         await waitForContent();
