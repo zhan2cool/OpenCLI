@@ -35,7 +35,7 @@ export const USER_SNAPSHOT_JS = `
       };
     })()
   `;
-async function readUserSnapshot(page) {
+export async function readUserSnapshot(page) {
     return await page.evaluate(USER_SNAPSHOT_JS);
 }
 export function assertReadableUserSnapshot(snapshot) {
