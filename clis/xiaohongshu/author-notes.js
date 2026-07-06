@@ -265,6 +265,17 @@ async function clickNoteAndExtract(page, noteId) {
   }
 
   if (!hasPopup) {
+    await page.evaluate(() => {
+      const el = document.querySelector('.tab-content-item, .feeds-container, .main-content');
+      if (el) el.scrollBy(0, 250);
+    });
+    await page.wait(500);
+    await page.nativeClick(clickResult.x, clickResult.y - 30);
+    await page.wait(1200);
+    hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+  }
+
+  if (!hasPopup) {
     await page.wait(2000);
   }
   const detail = await page.evaluate(EXTRACT_NOTE_JS);
