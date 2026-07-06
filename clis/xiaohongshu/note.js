@@ -46,10 +46,19 @@ export const NOTE_EXTRACT_JS = `
 
         // Extract all note images — try DOM selectors first, fall back to __INITIAL_STATE__
         const images = []
-        document.querySelectorAll('.carousel img, .swiper-slide:not(.swiper-slide-duplicate) img, .note-image img, .images-container img, [class*="slide"] img').forEach(el => {
-          const src = el.getAttribute('src') || el.getAttribute('data-src') || ''
-          if (src && !images.includes(src)) images.push(src)
-        })
+        const slideImgs = document.querySelectorAll('.swiper-slide:not(.swiper-slide-duplicate)');
+        if (slideImgs.length > 0) {
+          slideImgs.forEach(slide => {
+            const img = slide.querySelector('img');
+            const src = img?.getAttribute('src') || img?.getAttribute('data-src') || '';
+            if (src && !images.includes(src)) images.push(src);
+          });
+        } else {
+          document.querySelectorAll('.carousel img, .note-image img, .images-container img').forEach(el => {
+            const src = el.getAttribute('src') || el.getAttribute('data-src') || '';
+            if (src && !images.includes(src)) images.push(src);
+          });
+        }
         // Fallback: __INITIAL_STATE__ (covers lazy-loaded images and video covers)
         var _fallbackDebug = '';
         if (images.length === 0) {
