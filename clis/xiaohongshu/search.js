@@ -451,16 +451,26 @@ export const searchMoreCommand = cli({
             return { items, page: 1, has_more: hasMore };
         }
 
-        const state = await page.evaluate(() => {
+        let state = await page.evaluate(() => {
             const s = window.__xhsSearch;
             return s ? { keyword: s.keyword, uniqIds: s.uniqIds } : null;
         });
-        if (!state) {
-            throw new CommandExecutionError('搜索会话已过期，请重新从第1页开始搜索');
-        }
         const curUrl = await page.evaluate(() => window.location.href);
-        if (!curUrl.includes('search_result')) {
-            throw new CommandExecutionError('搜索页面已变化，请重新搜索');
+        const kw = String(kwargs.query || '').trim();
+
+        if (!state || !curUrl.includes('search_result')) {
+            if (!kw) {
+                throw new CommandExecutionError('搜索会话已过期，请重新从第1页开始搜索');
+            }
+            await page.goto(`https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(kw)}&source=web_search_result_notes`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await waitForContent();
+            await page.evaluate((keyword) => {
+                window.__xhsSearch = { keyword, uniqIds: [], page: 1 };
+            }, kw);
+            state = await page.evaluate(() => {
+                const s = window.__xhsSearch;
+                return s ? { keyword: s.keyword, uniqIds: s.uniqIds } : null;
+            });
         }
 
         await page.evaluate(buildScrollUntilJs(limit));
@@ -468,7 +478,8 @@ export const searchMoreCommand = cli({
             await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'scroll extraction'
         );
 
-        const seenSet = new Set(state.uniqIds);
+        const uniqIds = state ? state.uniqIds : [];
+        const seenSet = new Set(uniqIds);
         const newItems = [];
         for (const item of payload) {
             const key = item.url;
