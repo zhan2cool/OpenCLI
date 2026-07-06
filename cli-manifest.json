@@ -40508,11 +40508,11 @@
         "help": "小红书号，提供时与昵称双重校验"
       },
       {
-        "name": "skip-detail",
+        "name": "detail",
         "type": "boolean",
-        "default": false,
+        "default": true,
         "required": false,
-        "help": "不点开笔记获取详情，直接返回列表"
+        "help": "是否点开获取笔记详情"
       }
     ],
     "columns": [
