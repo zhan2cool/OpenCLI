@@ -228,7 +228,9 @@ export function buildSearchExtractJs(webHost) {
             const nameChild = authorWrapEl.querySelector('.name');
             author = nameChild ? cleanText(nameChild.textContent || '') : stripXhsAuthorDateSuffix(authorWrapEl.textContent || '');
           }
-          const likesEl = el.querySelector('.count, .like-count, .like-wrapper .count');
+          const likesEl = el.querySelector('.like-wrapper .count');
+          const collectsEl = el.querySelector('.collect-wrapper .count');
+          const commentsEl = el.querySelector('.comment-wrapper .count');
           const timeEl = el.querySelector('.name-time-wrapper .time');
           const detailLinkEl =
             el.querySelector('a.cover.mask') ||
@@ -258,6 +260,8 @@ export function buildSearchExtractJs(webHost) {
             title,
             author,
             likes: cleanText(likesEl?.textContent || '0'),
+            collects: cleanText(collectsEl?.textContent || '0'),
+            comments: cleanText(commentsEl?.textContent || '0'),
             url,
             author_url: normalizeUrl(authorLinkEl?.getAttribute('href') || ''),
             author_avatar: avatarImg ? cleanText(avatarImg.getAttribute('src') || '') : '',
