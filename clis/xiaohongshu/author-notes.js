@@ -228,10 +228,8 @@ async function clickNoteAndExtract(page, noteId) {
       if (!link) return null;
       const href = link.getAttribute('href') || '';
       const fullUrl = href.startsWith('http') ? href : 'https://www.xiaohongshu.com' + href;
-      const card = link.closest('section.note-item') || link.parentElement;
-      if (!card) return null;
-      card.scrollIntoView({ block: 'center' });
-      const rect = card.getBoundingClientRect();
+      link.scrollIntoView({ block: 'center' });
+      const rect = link.getBoundingClientRect();
       return { ok: true, url: fullUrl, x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) };
     };
     let r = tryFind();
