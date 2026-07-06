@@ -339,6 +339,7 @@ export const searchMoreCommand = cli({
     description: '搜索或续采小红书笔记（支持筛选）',
     domain: 'www.xiaohongshu.com',
     strategy: Strategy.COOKIE,
+    browser: true,
     navigateBefore: false,
     args: [
         { name: 'query', type: 'string', default: '', positional: true, help: '搜索关键词（第1页必填）' },
