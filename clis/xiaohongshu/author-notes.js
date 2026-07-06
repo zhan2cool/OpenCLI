@@ -228,8 +228,10 @@ async function clickNoteAndExtract(page, noteId) {
       if (!link) return null;
       const href = link.getAttribute('href') || '';
       const fullUrl = href.startsWith('http') ? href : 'https://www.xiaohongshu.com' + href;
-      link.scrollIntoView({ block: 'center' });
-      const rect = link.getBoundingClientRect();
+      const card = link.closest('section.note-item') || link.parentElement;
+      if (!card) return null;
+      card.scrollIntoView({ block: 'center' });
+      const rect = card.getBoundingClientRect();
       return { ok: true, url: fullUrl, x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) };
     };
     let r = tryFind();
@@ -249,19 +251,19 @@ async function clickNoteAndExtract(page, noteId) {
   const noteUrl = clickResult.url || `https://www.xiaohongshu.com/explore/${noteId}`;
   await page.wait(200 + Math.random() * 300);
   await page.nativeClick(clickResult.x, clickResult.y);
-  await page.wait(800);
+  await page.wait(1000);
 
   let hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   if (!hasPopup) {
-    await page.evaluate(() => window.scrollBy(0, -80));
-    await page.wait(300);
-    await page.nativeClick(clickResult.x, clickResult.y + 40);
+    await page.nativeClick(clickResult.x + 30, clickResult.y + 30);
     await page.wait(1200);
     hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   }
 
   if (!hasPopup) {
-    await page.wait(2000);
+    await page.nativeClick(clickResult.x - 30, clickResult.y + 20);
+    await page.wait(1500);
+    hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   }
 
   const detail = await page.evaluate(EXTRACT_NOTE_JS);
