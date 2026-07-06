@@ -355,22 +355,24 @@ export const searchMoreCommand = cli({
         const limit = parseLimit(kwargs.limit);
         const isFirst = pageNum === 1;
 
+        async function waitForContent() {
+            const r = unwrapEvaluateResult(await page.evaluate(WAIT_FOR_CONTENT_JS));
+            if (r === 'login_wall') throw new AuthRequiredError('www.xiaohongshu.com', '搜索需要登录');
+        }
+
         if (isFirst) {
             const kw = String(kwargs.query || '').trim();
             if (!kw) throw new ArgumentError('query is required for page 1');
 
             const url = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(kw)}&source=web_search_result_notes`;
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-            const waitResult = unwrapEvaluateResult(await page.evaluate(WAIT_FOR_CONTENT_JS));
-            if (waitResult === 'login_wall') {
-                throw new AuthRequiredError('www.xiaohongshu.com', '搜索需要登录');
-            }
+            await waitForContent();
 
             const noteType = String(kwargs['note-type'] || 'all');
             if (noteType === 'image' || noteType === 'video') {
                 const sel = '#' + noteType + '.channel';
                 await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.click(); }, sel);
-                await page.wait(1500);
+                await waitForContent();
             }
 
             const sort = String(kwargs.sort || 'general');
@@ -391,7 +393,7 @@ export const searchMoreCommand = cli({
                                     if ((t.textContent || '').trim() === lbl) { t.click(); return; }
                                 }
                             }, 0, label);
-                            await page.wait(1000);
+                            await waitForContent();
                         }
                     }
                     if (time !== 'all') {
@@ -405,11 +407,10 @@ export const searchMoreCommand = cli({
                                     if ((t.textContent || '').trim() === lbl) { t.click(); return; }
                                 }
                             }, 2, label);
-                            await page.wait(1000);
+                            await waitForContent();
                         }
                     }
                 }
-                await page.wait(1500);
             }
 
             const initialPayload = requireSearchRows(
