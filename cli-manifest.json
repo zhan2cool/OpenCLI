@@ -40510,7 +40510,7 @@
       {
         "name": "detail",
         "type": "boolean",
-        "default": true,
+        "default": false,
         "required": false,
         "help": "是否点开获取笔记详情"
       }
