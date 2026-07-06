@@ -378,81 +378,67 @@ export const searchNotesCommand = cli({
             const sort = String(kwargs.sort || 'general');
             const time = String(kwargs.time || 'all');
             if (sort !== 'general' || time !== 'all') {
+                await page.evaluate(() => {
+                    const btn = document.querySelector('.filter');
+                    if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                });
                 await page.evaluate(() => new Promise(r => {
                     let t = 0;
                     const c = () => {
-                        if (document.querySelector('.filter')) return r();
-                        if (++t > 30) return r();
+                        const p = document.querySelector('.filter-panel');
+                        if (p && getComputedStyle(p).display !== 'none') return r();
+                        if (++t > 20) return r();
                         setTimeout(c, 200);
                     };
                     c();
                 }));
-                const filterRect = await page.evaluate(() => {
-                    const btn = document.querySelector('.filter');
-                    if (!btn) return null;
-                    const r = btn.getBoundingClientRect();
-                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                });
-                if (filterRect) {
-                    await page.nativeClick(Math.round(filterRect.x), Math.round(filterRect.y));
-                    await page.wait(200);
-                    await page.evaluate(() => new Promise(r => {
-                        let t = 0;
-                        const c = () => {
-                            if (document.querySelector('.filter-panel') && getComputedStyle(document.querySelector('.filter-panel')).display !== 'none') return r();
-                            if (++t > 20) return r();
-                            setTimeout(c, 200);
-                        };
-                        c();
-                    }));
-                    if (sort !== 'general') {
-                        const label = FILTER_SORT[sort];
-                        if (label) {
-                            const pos = await page.evaluate((gi, lbl) => {
-                                const groups = document.querySelectorAll('.filter-panel .filters');
-                                const group = groups[gi];
-                                if (!group) return null;
-                                for (const t of group.querySelectorAll('.tags')) {
-                                    const span = t.querySelector('span');
-                                    if (!span) continue;
-                                    const style = getComputedStyle(t);
-                                    if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                                    if ((span.textContent || '').trim() === lbl) {
-                                        const r = span.getBoundingClientRect();
-                                        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                                    }
+                if (sort !== 'general') {
+                    const label = FILTER_SORT[sort];
+                    if (label) {
+                        const pos = await page.evaluate((gi, lbl) => {
+                            const groups = document.querySelectorAll('.filter-panel .filters');
+                            const group = groups[gi];
+                            if (!group) return null;
+                            for (const t of group.querySelectorAll('.tags')) {
+                                const span = t.querySelector('span');
+                                if (!span) continue;
+                                const style = getComputedStyle(t);
+                                if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
+                                if ((span.textContent || '').trim() === lbl) {
+                                    const r = span.getBoundingClientRect();
+                                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
                                 }
-                                return null;
-                            }, 0, label);
-                            if (pos) {
-                                await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
-                                await waitForContent();
                             }
+                            return null;
+                        }, 0, label);
+                        if (pos) {
+                            await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
+                            await waitForContent();
                         }
                     }
-                    if (time !== 'all') {
-                        const label = FILTER_TIME[time];
-                        if (label) {
-                            const pos = await page.evaluate((gi, lbl) => {
-                                const groups = document.querySelectorAll('.filter-panel .filters');
-                                const group = groups[gi];
-                                if (!group) return null;
-                                for (const t of group.querySelectorAll('.tags')) {
-                                    const span = t.querySelector('span');
-                                    if (!span) continue;
-                                    const style = getComputedStyle(t);
-                                    if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                                    if ((span.textContent || '').trim() === lbl) {
-                                        const r = span.getBoundingClientRect();
-                                        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                                    }
+                }
+                if (time !== 'all') {
+                    const label = FILTER_TIME[time];
+                    if (label) {
+                        const pos = await page.evaluate((gi, lbl) => {
+                            const groups = document.querySelectorAll('.filter-panel .filters');
+                            const group = groups[gi];
+                            if (!group) return null;
+                            for (const t of group.querySelectorAll('.tags')) {
+                                const span = t.querySelector('span');
+                                if (!span) continue;
+                                const style = getComputedStyle(t);
+                                if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
+                                if ((span.textContent || '').trim() === lbl) {
+                                    const r = span.getBoundingClientRect();
+                                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
                                 }
-                                return null;
-                            }, 2, label);
-                            if (pos) {
-                                await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
-                                await waitForContent();
                             }
+                            return null;
+                        }, 2, label);
+                        if (pos) {
+                            await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
+                            await waitForContent();
                         }
                     }
                 }
