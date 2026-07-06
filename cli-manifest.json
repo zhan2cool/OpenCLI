@@ -40506,6 +40506,13 @@
         "default": "",
         "required": false,
         "help": "小红书号，提供时与昵称双重校验"
+      },
+      {
+        "name": "no-detail",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "help": "不点开笔记获取详情，直接返回列表"
       }
     ],
     "columns": [
