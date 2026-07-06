@@ -217,7 +217,6 @@ export function buildSearchExtractJs(webHost) {
         };
 
         for (const el of collectNoteCards()) {
-          // Skip "related searches" sections
           if (el.classList?.contains('query-note-item')) continue;
           if (!isVisibleNote(el)) continue;
 
@@ -230,7 +229,7 @@ export function buildSearchExtractJs(webHost) {
             author = nameChild ? cleanText(nameChild.textContent || '') : stripXhsAuthorDateSuffix(authorWrapEl.textContent || '');
           }
           const likesEl = el.querySelector('.count, .like-count, .like-wrapper .count');
-          // Prefer search_result link (preserves xsec_token) over generic /explore/ link
+          const timeEl = el.querySelector('.name-time-wrapper .time');
           const detailLinkEl =
             el.querySelector('a.cover.mask') ||
             el.querySelector('a[href*="/search_result/"]') ||
@@ -239,6 +238,7 @@ export function buildSearchExtractJs(webHost) {
           const authorLinkEl = el.querySelector('a.author, a[href*="/user/profile/"]');
           const coverImg = detailLinkEl?.querySelector('img');
           const coverUrl = coverImg ? cleanText(coverImg.getAttribute('src') || '') : '';
+          const videoEl = el.querySelector('.video-duration,.play-icon,.badge-video,[class*="video" i]');
 
           const url = normalizeUrl(detailLinkEl?.getAttribute('href') || '');
           if (!url) continue;
@@ -247,9 +247,6 @@ export function buildSearchExtractJs(webHost) {
           if (seen.has(key)) continue;
           seen.add(key);
 
-          // Fallback title: the new bare-section render keeps the note caption
-          // inside the search_result anchor's first span, not in a class-named
-          // .title element. Pull from there when the class-based pick is empty.
           let title = cleanText(titleEl?.textContent || '');
           if (!title) {
             const captionSpan = detailLinkEl?.querySelector('span');
@@ -263,6 +260,8 @@ export function buildSearchExtractJs(webHost) {
             url,
             author_url: normalizeUrl(authorLinkEl?.getAttribute('href') || ''),
             cover: coverUrl,
+            published_at: timeEl ? cleanText(timeEl) : '',
+            type: videoEl ? 'video' : 'normal',
           });
         }
 
@@ -374,46 +373,40 @@ export const searchMoreCommand = cli({
             const sort = String(kwargs.sort || 'general');
             const time = String(kwargs.time || 'all');
             if (sort !== 'general' || time !== 'all') {
-                await page.evaluate(() => {
-                    const btn = document.querySelector('.filter');
-                    if (btn) {
-                        ['mouseenter', 'mouseover', 'click'].forEach(t => btn.dispatchEvent(new MouseEvent(t, { bubbles: true })));
+                const filterBtn = await page.$('.filter');
+                if (filterBtn) {
+                    await filterBtn.hover();
+                    await page.wait(500);
+                    if (sort !== 'general') {
+                        const label = FILTER_SORT[sort];
+                        if (label) {
+                            await page.evaluate((gi, lbl) => {
+                                const groups = document.querySelectorAll('.filter-panel .filters');
+                                const group = groups[gi];
+                                if (!group) return;
+                                for (const t of group.querySelectorAll('.tags')) {
+                                    if ((t.textContent || '').trim() === lbl) { t.click(); return; }
+                                }
+                            }, 0, label);
+                            await page.wait(1000);
+                        }
                     }
-                });
-                await page.wait(500);
-                if (sort !== 'general') {
-                    const label = FILTER_SORT[sort];
-                    if (label) {
-                        await page.evaluate((gi, lbl) => {
-                            const groups = document.querySelectorAll('.filter-panel .filters');
-                            const group = groups[gi];
-                            if (!group) return;
-                            for (const t of group.querySelectorAll('.tags')) {
-                                if ((t.textContent || '').trim() === lbl) { t.click(); return; }
-                            }
-                        }, 0, label);
-                        await page.wait(600);
-                    }
-                }
-                if (time !== 'all') {
-                    const label = FILTER_TIME[time];
-                    if (label) {
-                        await page.evaluate((gi, lbl) => {
-                            const groups = document.querySelectorAll('.filter-panel .filters');
-                            const group = groups[gi];
-                            if (!group) return;
-                            for (const t of group.querySelectorAll('.tags')) {
-                                if ((t.textContent || '').trim() === lbl) { t.click(); return; }
-                            }
-                        }, 2, label);
-                        await page.wait(600);
+                    if (time !== 'all') {
+                        const label = FILTER_TIME[time];
+                        if (label) {
+                            await page.evaluate((gi, lbl) => {
+                                const groups = document.querySelectorAll('.filter-panel .filters');
+                                const group = groups[gi];
+                                if (!group) return;
+                                for (const t of group.querySelectorAll('.tags')) {
+                                    if ((t.textContent || '').trim() === lbl) { t.click(); return; }
+                                }
+                            }, 2, label);
+                            await page.wait(1000);
+                        }
                     }
                 }
-                await page.evaluate(() => {
-                    const op = document.querySelector('.operation');
-                    if (op && (op.textContent || '').trim().includes('收起')) op.click();
-                });
-                await page.wait(800);
+                await page.wait(1500);
             }
 
             const initialPayload = requireSearchRows(
@@ -433,6 +426,11 @@ export const searchMoreCommand = cli({
                     if (payload.length >= limit) break;
                 }
             }
+            const hasMore = await page.evaluate(() => {
+                const end = document.querySelector('.end-container.status-container');
+                if (end && (end.textContent || '').includes('THE END')) return false;
+                return document.querySelectorAll('section.note-item, section:has(a[href*="/search_result/"]), section:has(a[href*="/explore/"])').length > 0;
+            });
 
             const ids = payload.map(i => i.url).filter(Boolean);
             await page.evaluate((keyword, initIds) => {
@@ -446,7 +444,7 @@ export const searchMoreCommand = cli({
             }
 
             const items = payload.filter(i => i.title).slice(0, limit);
-            return { items, page: 1, has_more: items.length >= limit };
+            return { items, page: 1, has_more };
         }
 
         const state = await page.evaluate(() => {
@@ -491,7 +489,12 @@ export const searchMoreCommand = cli({
         }
 
         const items = newItems.filter(i => i.title).slice(0, limit);
-        return { items, page: pageNum, has_more: items.length >= limit };
+        const hasMore = await page.evaluate(() => {
+            const end = document.querySelector('.end-container.status-container');
+            if (end && (end.textContent || '').includes('THE END')) return false;
+            return document.querySelectorAll('section.note-item, section:has(a[href*="/search_result/"]), section:has(a[href*="/explore/"])').length > 0;
+        });
+        return { items, page: pageNum, has_more: hasMore };
     },
 });
 
