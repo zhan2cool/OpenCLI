@@ -486,14 +486,14 @@ export const searchMoreCommand = cli({
 
             if (newItems.length >= limit) break;
 
-            if (newInBatch === 0) {
+            if (newInBatch === 0 && scrollCount > 0) {
                 noNewCount++;
                 if (noNewCount >= 2) break;
-            } else {
+            } else if (newInBatch > 0) {
                 noNewCount = 0;
             }
 
-            await page.evaluate(() => window.scrollBy(0, 700));
+            await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
             await page.wait(1500);
             scrollCount++;
         }
