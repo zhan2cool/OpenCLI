@@ -40508,7 +40508,7 @@
         "help": "小红书号，提供时与昵称双重校验"
       },
       {
-        "name": "no-detail",
+        "name": "skip-detail",
         "type": "boolean",
         "default": false,
         "required": false,

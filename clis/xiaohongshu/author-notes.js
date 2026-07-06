@@ -343,17 +343,17 @@ export const command = cli({
     { name: 'limit', type: 'int', default: 30, help: '每页笔记数' },
     { name: 'author-id', type: 'string', default: '', help: '博主ID（第2+页必填，校验用）' },
     { name: 'xhs-id', type: 'string', default: '', help: '小红书号，提供时与昵称双重校验' },
-    { name: 'no-detail', type: 'boolean', default: false, help: '不点开笔记获取详情，直接返回列表' },
+    { name: 'skip-detail', type: 'boolean', default: false, help: '不点开笔记获取详情，直接返回列表' },
   ],
   columns: ['id', 'title', 'type', 'likes', 'collects', 'comments', 'cover', 'url'],
   func: async (page, kwargs) => {
     const pageNum = Math.max(1, Number(kwargs.page ?? 1));
     const limit = Math.max(1, Number(kwargs.limit ?? 30));
     const isFirst = pageNum === 1;
-    const noDetail = Boolean(kwargs['no-detail']);
+    const skipDetail = Boolean(kwargs['skip-detail']);
 
     async function collectNote(n) {
-      if (!noDetail) return await clickNoteAndExtract(page, n.id);
+      if (!skipDetail) return await clickNoteAndExtract(page, n.id);
       return {
         id: n.id || '',
         title: n.title || '',
