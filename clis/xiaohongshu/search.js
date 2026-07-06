@@ -471,7 +471,7 @@ export const searchNotesCommand = cli({
                 });
             }
 
-            const items = allItems.filter(i => i.title).slice(0, limit);
+            const items = allItems.slice(0, limit);
             return { items, page: 1, has_more: hasMore };
         }
 
@@ -542,7 +542,7 @@ export const searchNotesCommand = cli({
             }, newIds);
         }
 
-        const items = newItems.filter(i => i.title).slice(0, limit);
+        const items = newItems.slice(0, limit);
         const hasMore = await page.evaluate(() => {
             const end = document.querySelector('.end-container.status-container');
             if (end && (end.textContent || '').includes('THE END')) return false;
