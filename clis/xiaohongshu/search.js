@@ -380,7 +380,7 @@ export const searchNotesCommand = cli({
             if (sort !== 'general' || time !== 'all') {
                 await page.evaluate(() => {
                     const btn = document.querySelector('.filter');
-                    if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                    if (btn) btn.click();
                 });
                 await page.wait(500);
                 if (sort !== 'general') {
