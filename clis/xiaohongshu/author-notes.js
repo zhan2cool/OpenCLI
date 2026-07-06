@@ -233,7 +233,9 @@ async function clickNoteAndExtract(page, noteId) {
       card.scrollIntoView({ block: 'center' });
       void document.body.offsetHeight;
       const rect = card.getBoundingClientRect();
-      return { ok: true, url: fullUrl, x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) };
+      const cx = Math.floor(rect.x + rect.width / 2) + 1;
+      const cy = Math.floor(rect.y + rect.height / 2) + 1;
+      return { ok: true, url: fullUrl, x: cx, y: cy, _debug: { x: rect.x, y: rect.y, w: rect.width, h: rect.height, cx, cy, vw: window.innerWidth, vh: window.innerHeight } };
     };
     let r = tryFind();
     if (!r) {
@@ -250,9 +252,25 @@ async function clickNoteAndExtract(page, noteId) {
   }, noteId);
   if (!clickResult || !clickResult.ok) return null;
   const noteUrl = clickResult.url || `https://www.xiaohongshu.com/explore/${noteId}`;
+  const dbg = clickResult._debug;
+  if (dbg) console.warn('[CLICK_DEBUG]', JSON.stringify(dbg));
   await page.wait(200 + Math.random() * 300);
   await page.nativeClick(clickResult.x, clickResult.y);
   await page.wait(1000);
+
+  let hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+  if (!hasPopup && dbg) {
+    console.warn('[CLICK_DEBUG] first click failed');
+    const afterRect = await page.evaluate((nid) => {
+      const sel = 'section.note-item a[href*="/' + nid + '"]';
+      const link = document.querySelector(sel);
+      const card = link?.closest('section.note-item');
+      if (!card) return 'card_not_found';
+      const r = card.getBoundingClientRect();
+      return { x: r.x, y: r.y, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight };
+    }, noteId);
+    console.warn('[CLICK_DEBUG] after click rect:', JSON.stringify(afterRect));
+  }
 
   let hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   if (!hasPopup) {
