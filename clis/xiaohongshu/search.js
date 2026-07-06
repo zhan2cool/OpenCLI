@@ -262,7 +262,7 @@ export function buildSearchExtractJs(webHost) {
             author_url: normalizeUrl(authorLinkEl?.getAttribute('href') || ''),
             author_avatar: avatarImg ? cleanText(avatarImg.getAttribute('src') || '') : '',
             cover: coverUrl,
-            published_at: timeEl ? cleanText(timeEl) : '',
+            published_at: timeEl ? cleanText(timeEl.textContent) : '',
             type: videoEl ? 'video' : 'normal',
           });
         }
