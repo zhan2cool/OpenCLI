@@ -386,7 +386,16 @@ export const searchNotesCommand = cli({
                 });
                 if (filterRect) {
                     await page.nativeClick(Math.round(filterRect.x), Math.round(filterRect.y));
-                    await page.wait(600);
+                    await page.wait(200);
+                    await page.evaluate(() => new Promise(r => {
+                        let t = 0;
+                        const c = () => {
+                            if (document.querySelector('.filter-panel') && getComputedStyle(document.querySelector('.filter-panel')).display !== 'none') return r();
+                            if (++t > 20) return r();
+                            setTimeout(c, 200);
+                        };
+                        c();
+                    }));
                     if (sort !== 'general') {
                         const label = FILTER_SORT[sort];
                         if (label) {
