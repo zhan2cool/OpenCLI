@@ -231,6 +231,8 @@ async function clickNoteAndExtract(page, noteId) {
       const card = link.closest('section.note-item') || link.parentElement;
       if (!card) return null;
       card.scrollIntoView({ block: 'center' });
+      const container = document.querySelector('.tab-content-item, .feeds-container, .main-content');
+      if (container) container.scrollBy(0, 1);
       const rect = card.getBoundingClientRect();
       return { ok: true, url: fullUrl, x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) };
     };
