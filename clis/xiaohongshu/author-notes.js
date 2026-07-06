@@ -276,6 +276,24 @@ async function clickNoteAndExtract(page, noteId) {
   }
 
   if (!hasPopup) {
+    const titleRect = await page.evaluate((nid) => {
+      const link = document.querySelector('section.note-item a[href*="/' + nid + '"]');
+      const card = link?.closest('section.note-item');
+      if (!card) return null;
+      const titleEl = card.querySelector('a.title, .note-title a, a[class*="title"]');
+      if (!titleEl) return null;
+      titleEl.scrollIntoView({ block: 'center' });
+      const r = titleEl.getBoundingClientRect();
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    }, noteId);
+    if (titleRect) {
+      await page.nativeClick(titleRect.x, titleRect.y);
+      await page.wait(1500);
+      hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
+    }
+  }
+
+  if (!hasPopup) {
     await page.wait(2000);
   }
   const detail = await page.evaluate(EXTRACT_NOTE_JS);
