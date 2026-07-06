@@ -344,7 +344,7 @@ export const searchNotesCommand = cli({
     args: [
         { name: 'query', type: 'string', default: '', positional: true, help: '搜索关键词（第1页必填）' },
         { name: 'page', type: 'int', default: 1, help: '页码' },
-        { name: 'limit', type: 'int', default: 30, help: '目标笔记数量' },
+        { name: 'limit', type: 'int', default: 50, help: '目标笔记数量' },
         { name: 'note-type', type: 'string', default: 'all', help: '笔记类型: all/image/video' },
         { name: 'time', type: 'string', default: 'all', help: '发布时间: all/last_one_day/last_one_week/last_half_year' },
         { name: 'sort', type: 'string', default: 'general', help: '排序: general/latest/most_liked/most_commented' },

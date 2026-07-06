@@ -41291,7 +41291,7 @@
       {
         "name": "limit",
         "type": "int",
-        "default": 30,
+        "default": 50,
         "required": false,
         "help": "目标笔记数量"
       },
