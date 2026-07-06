@@ -391,6 +391,8 @@ export const searchNotesCommand = cli({
                             const group = groups[gi];
                             if (!group) return;
                             for (const t of group.querySelectorAll('.tags')) {
+                                const style = getComputedStyle(t);
+                                if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
                                 if ((t.textContent || '').trim() === lbl) { t.click(); return; }
                             }
                         }, 0, label);
@@ -405,6 +407,8 @@ export const searchNotesCommand = cli({
                             const group = groups[gi];
                             if (!group) return;
                             for (const t of group.querySelectorAll('.tags')) {
+                                const style = getComputedStyle(t);
+                                if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
                                 if ((t.textContent || '').trim() === lbl) { t.click(); return; }
                             }
                         }, 2, label);
