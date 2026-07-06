@@ -451,42 +451,51 @@ export const searchMoreCommand = cli({
             return { items, page: 1, has_more: hasMore };
         }
 
-        let state = await page.evaluate(() => {
+        const curUrl = await page.evaluate(() => window.location.href);
+        if (!curUrl.includes('search_result')) {
+            throw new CommandExecutionError('搜索页面已变化，请重新搜索');
+        }
+        const state = await page.evaluate(() => {
             const s = window.__xhsSearch;
             return s ? { keyword: s.keyword, uniqIds: s.uniqIds } : null;
         });
-        const curUrl = await page.evaluate(() => window.location.href);
-        const kw = String(kwargs.query || '').trim();
-
-        if (!state || !curUrl.includes('search_result')) {
-            if (!kw) {
-                throw new CommandExecutionError('搜索会话已过期，请重新从第1页开始搜索');
-            }
-            await page.goto(`https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(kw)}&source=web_search_result_notes`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-            await waitForContent();
-            await page.evaluate((keyword) => {
-                window.__xhsSearch = { keyword, uniqIds: [], page: 1 };
-            }, kw);
-            state = await page.evaluate(() => {
-                const s = window.__xhsSearch;
-                return s ? { keyword: s.keyword, uniqIds: s.uniqIds } : null;
-            });
+        if (!state) {
+            throw new CommandExecutionError('搜索会话已过期，请重新从第1页开始搜索');
         }
 
-        await page.evaluate(buildScrollUntilJs(limit));
-        const payload = requireSearchRows(
-            await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'scroll extraction'
-        );
-
-        const uniqIds = state ? state.uniqIds : [];
-        const seenSet = new Set(uniqIds);
+        const seenSet = new Set(state.uniqIds);
         const newItems = [];
-        for (const item of payload) {
-            const key = item.url;
-            if (!key || seenSet.has(key)) continue;
-            seenSet.add(key);
-            newItems.push(item);
+        let scrollCount = 0;
+        let noNewCount = 0;
+        const MAX_SCROLL = 15;
+
+        while (newItems.length < limit && scrollCount < MAX_SCROLL) {
+            const payload = requireSearchRows(
+                await page.evaluate(buildSearchExtractJs('www.xiaohongshu.com')), 'scroll extraction'
+            );
+
+            let newInBatch = 0;
+            for (const item of payload) {
+                const key = item.url;
+                if (!key || seenSet.has(key)) continue;
+                seenSet.add(key);
+                newItems.push(item);
+                newInBatch++;
+                if (newItems.length >= limit) break;
+            }
+
             if (newItems.length >= limit) break;
+
+            if (newInBatch === 0) {
+                noNewCount++;
+                if (noNewCount >= 2) break;
+            } else {
+                noNewCount = 0;
+            }
+
+            await page.evaluate(() => window.scrollBy(0, 700));
+            await page.wait(1500);
+            scrollCount++;
         }
 
         const newIds = newItems.map(i => i.url).filter(Boolean);
