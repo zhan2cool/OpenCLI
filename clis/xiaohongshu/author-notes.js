@@ -273,6 +273,7 @@ async function clickNoteAndExtract(page, noteId) {
   if (!hasPopup) {
     await page.wait(2000);
   }
+  const detail = await page.evaluate(EXTRACT_NOTE_JS);
   if (!detail) return null;
 
   await page.wait(200);
