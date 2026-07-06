@@ -41266,7 +41266,7 @@
   },
   {
     "site": "xiaohongshu",
-    "name": "search-more",
+    "name": "search-notes",
     "description": "搜索或续采小红书笔记（支持筛选）",
     "access": "read",
     "domain": "www.xiaohongshu.com",

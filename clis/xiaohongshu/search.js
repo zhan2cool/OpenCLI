@@ -332,9 +332,9 @@ export const command = cli({
 const FILTER_SORT = { general: '综合', latest: '最新', most_liked: '最多点赞', most_commented: '最多评论' };
 const FILTER_TIME = { all: '不限', last_one_day: '一天内', last_one_week: '一周内', last_half_year: '半年内' };
 
-export const searchMoreCommand = cli({
+export const searchNotesCommand = cli({
     site: 'xiaohongshu',
-    name: 'search-more',
+    name: 'search-notes',
     access: 'read',
     description: '搜索或续采小红书笔记（支持筛选）',
     domain: 'www.xiaohongshu.com',
