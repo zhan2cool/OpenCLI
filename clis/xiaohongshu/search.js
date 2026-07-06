@@ -378,12 +378,15 @@ export const searchNotesCommand = cli({
             const sort = String(kwargs.sort || 'general');
             const time = String(kwargs.time || 'all');
             if (sort !== 'general' || time !== 'all') {
+                await page.evaluate(() => {
+                    const btn = document.querySelector('.filter');
+                    if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                });
+                await page.wait(500);
                 if (sort !== 'general') {
                     const label = FILTER_SORT[sort];
                     if (label) {
                         await page.evaluate((gi, lbl) => {
-                            const btn = document.querySelector('.filter');
-                            if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
                             const groups = document.querySelectorAll('.filter-panel .filters');
                             const group = groups[gi];
                             if (!group) return;
@@ -402,8 +405,6 @@ export const searchNotesCommand = cli({
                     const label = FILTER_TIME[time];
                     if (label) {
                         await page.evaluate((gi, lbl) => {
-                            const btn = document.querySelector('.filter');
-                            if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
                             const groups = document.querySelectorAll('.filter-panel .filters');
                             const group = groups[gi];
                             if (!group) return;
