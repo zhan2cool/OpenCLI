@@ -447,7 +447,7 @@ export const searchMoreCommand = cli({
             }
 
             const items = payload.filter(i => i.title).slice(0, limit);
-            return { items, page: 1, has_more };
+            return { items, page: 1, has_more: hasMore };
         }
 
         const state = await page.evaluate(() => {
