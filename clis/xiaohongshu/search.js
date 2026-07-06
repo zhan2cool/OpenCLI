@@ -378,6 +378,15 @@ export const searchNotesCommand = cli({
             const sort = String(kwargs.sort || 'general');
             const time = String(kwargs.time || 'all');
             if (sort !== 'general' || time !== 'all') {
+                await page.evaluate(() => new Promise(r => {
+                    let t = 0;
+                    const c = () => {
+                        if (document.querySelector('.filter')) return r();
+                        if (++t > 30) return r();
+                        setTimeout(c, 200);
+                    };
+                    c();
+                }));
                 const filterRect = await page.evaluate(() => {
                     const btn = document.querySelector('.filter');
                     if (!btn) return null;
