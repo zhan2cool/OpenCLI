@@ -363,6 +363,27 @@ export const searchNotesCommand = cli({
             const r = unwrapEvaluateResult(await page.evaluate(WAIT_FOR_CONTENT_JS));
             if (r === 'login_wall') throw new AuthRequiredError('www.xiaohongshu.com', '搜索需要登录');
         }
+        async function ensureFilterPanel() {
+            const open = await page.evaluate(() => {
+                const p = document.querySelector('.filter-panel');
+                return p && getComputedStyle(p).display !== 'none';
+            });
+            if (open) return;
+            await page.evaluate(() => {
+                const btn = document.querySelector('.filter');
+                if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            });
+            await page.evaluate(() => new Promise(r => {
+                let t = 0;
+                const c = () => {
+                    const p = document.querySelector('.filter-panel');
+                    if (p && getComputedStyle(p).display !== 'none') return r();
+                    if (++t > 20) return r();
+                    setTimeout(c, 200);
+                };
+                c();
+            }));
+        }
 
         if (isFirst) {
             const kw = String(kwargs.query || '').trim();
@@ -381,71 +402,65 @@ export const searchNotesCommand = cli({
 
             const sort = String(kwargs.sort || 'general');
             const time = String(kwargs.time || 'all');
-            if (sort !== 'general' || time !== 'all') {
-                await page.evaluate(() => {
-                    const btn = document.querySelector('.filter');
-                    if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-                });
-                await page.evaluate(() => new Promise(r => {
-                    let t = 0;
-                    const c = () => {
-                        const p = document.querySelector('.filter-panel');
-                        if (p && getComputedStyle(p).display !== 'none') return r();
-                        if (++t > 20) return r();
-                        setTimeout(c, 200);
-                    };
-                    c();
-                }));
-                if (sort !== 'general') {
-                    const label = FILTER_SORT[sort];
-                    if (label) {
-                        const pos = await page.evaluate((gi, lbl) => {
-                            const groups = document.querySelectorAll('.filter-panel .filters');
-                            const group = groups[gi];
-                            if (!group) return null;
-                            for (const t of group.querySelectorAll('.tags')) {
-                                const span = t.querySelector('span');
-                                if (!span) continue;
-                                const style = getComputedStyle(t);
-                                if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                                if ((span.textContent || '').trim() === lbl) {
-                                    const r = span.getBoundingClientRect();
-                                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                                }
+
+            let panelNeedsWait = false;
+
+            if (sort !== 'general') {
+                await ensureFilterPanel();
+                panelNeedsWait = true;
+                const label = FILTER_SORT[sort];
+                if (label) {
+                    const pos = await page.evaluate((gi, lbl) => {
+                        const groups = document.querySelectorAll('.filter-panel .filters');
+                        const group = groups[gi];
+                        if (!group) return null;
+                        for (const t of group.querySelectorAll('.tags')) {
+                            const span = t.querySelector('span');
+                            if (!span) continue;
+                            const style = getComputedStyle(t);
+                            if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
+                            if ((span.textContent || '').trim() === lbl) {
+                                const r = span.getBoundingClientRect();
+                                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
                             }
-                            return null;
-                        }, 0, label);
-                        if (pos) {
-                            await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
-                            await waitForContent();
                         }
+                        return null;
+                    }, 0, label);
+                    if (pos) {
+                        await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
                     }
                 }
-                if (time !== 'all') {
-                    const label = FILTER_TIME[time];
-                    if (label) {
-                        const pos = await page.evaluate((gi, lbl) => {
-                            const groups = document.querySelectorAll('.filter-panel .filters');
-                            const group = groups[gi];
-                            if (!group) return null;
-                            for (const t of group.querySelectorAll('.tags')) {
-                                const span = t.querySelector('span');
-                                if (!span) continue;
-                                const style = getComputedStyle(t);
-                                if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                                if ((span.textContent || '').trim() === lbl) {
-                                    const r = span.getBoundingClientRect();
-                                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                                }
+            }
+
+            if (time !== 'all') {
+                if (!panelNeedsWait) await ensureFilterPanel();
+                panelNeedsWait = true;
+                const label = FILTER_TIME[time];
+                if (label) {
+                    const pos = await page.evaluate((gi, lbl) => {
+                        const groups = document.querySelectorAll('.filter-panel .filters');
+                        const group = groups[gi];
+                        if (!group) return null;
+                        for (const t of group.querySelectorAll('.tags')) {
+                            const span = t.querySelector('span');
+                            if (!span) continue;
+                            const style = getComputedStyle(t);
+                            if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
+                            if ((span.textContent || '').trim() === lbl) {
+                                const r = span.getBoundingClientRect();
+                                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
                             }
-                            return null;
-                        }, 2, label);
-                        if (pos) {
-                            await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
-                            await waitForContent();
                         }
+                        return null;
+                    }, 2, label);
+                    if (pos) {
+                        await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
                     }
                 }
+            }
+
+            if (panelNeedsWait) {
+                await waitForContent();
             }
 
             const seenSet = new Set();
