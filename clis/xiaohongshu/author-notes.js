@@ -7,7 +7,12 @@ import {
   isLoginWallSnapshot,
 } from './user.js';
 import { extractXhsUserNotes } from './user-helpers.js';
-import { buildUserSearchExtractJs, stripXhsUserNameSuffix } from './user-search.js';
+import {
+  buildUserSearchExtractJs,
+  stripXhsUserNameSuffix,
+  findExactOneboxUser,
+  clickExactOneboxUserBox,
+} from './user-search.js';
 
 const WEB_HOST = 'www.xiaohongshu.com';
 const MAX_FIFO = 200;
@@ -20,9 +25,19 @@ function throwLoginWall() {
 async function searchAndMatchUser(page, keyword, xhsId) {
   const url = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(keyword)}`;
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.wait(2000);
+  await page.wait(1.2);
   const body = await page.evaluate(() => (document.body?.innerText || '').trim().slice(0, 100));
   if (/登录/.test(body)) throwLoginWall();
+  const exactOnebox = await findExactOneboxUser(page, keyword, WEB_HOST);
+  if (exactOnebox) {
+    await clickExactOneboxUserBox(page, keyword);
+    const currentUrl = await page.evaluate(() => window.location.href || '');
+    return {
+      ...exactOnebox,
+      profile_url: /\/user\/profile\/[a-f0-9]{24}/i.test(currentUrl) ? currentUrl : exactOnebox.profile_url,
+      url: /\/user\/profile\/[a-f0-9]{24}/i.test(currentUrl) ? currentUrl : exactOnebox.url,
+    };
+  }
   if (!await page.evaluate(() => document.querySelector('#user.channel.active'))) {
     await page.evaluate(() => { const t = document.querySelector('#user.channel'); if (t) t.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
   }

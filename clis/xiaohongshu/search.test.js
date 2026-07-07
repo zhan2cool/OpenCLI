@@ -221,6 +221,71 @@ describe('xiaohongshu search', () => {
         });
     });
 });
+describe('xiaohongshu search-notes filters', () => {
+    it('applies filters by group title instead of hard-coded group index', async () => {
+        const cmd = getRegistry().get('xiaohongshu/search-notes');
+        expect(cmd?.func).toBeTypeOf('function');
+        const page = createPageMock([]);
+        page.nativeClick = vi.fn().mockResolvedValue(undefined);
+        page.evaluate.mockImplementation(async (script, ...args) => {
+            const text = String(script);
+            if (text.includes('if (document.querySelector(\'.filter\')) return r()')) {
+                return undefined;
+            }
+            if (text.includes('window.location.href')) {
+                return 'https://www.xiaohongshu.com/search_result?keyword=%E6%8A%A4%E8%82%A4&source=web_search_result_notes';
+            }
+            if (text.includes('const panel = document.querySelector(\'.filter-panel\')')) {
+                return true;
+            }
+            if (text.includes('const btn = document.querySelector(\'.filter\')')) {
+                return undefined;
+            }
+            if (text.includes('foundGroup: false, foundTag: false, active: false')) {
+                const [groupTitle, label] = args;
+                return {
+                    foundGroup: ['排序依据', '笔记类型', '发布时间'].includes(groupTitle),
+                    foundTag: true,
+                    active: (groupTitle === '排序依据' && label === '最多点赞')
+                        || (groupTitle === '笔记类型' && label === '图文')
+                        || (groupTitle === '发布时间' && label === '一天内'),
+                };
+            }
+            if (text.includes('const btn = document.querySelector(\'.filter-panel .operation-container .operation[data-hp-bound]\')')) {
+                return undefined;
+            }
+            if (text.includes('window.__xhsSearch = { keyword, uniqIds: initIds, page: 1 }')) {
+                return undefined;
+            }
+            if (text.includes('const end = document.querySelector(\'.end-container.status-container\')')) {
+                return true;
+            }
+            if (text.includes('new Promise((resolve) =>')) {
+                return 'content';
+            }
+            return [];
+        });
+
+        const result = await cmd.func(page, {
+            query: '护肤',
+            page: 1,
+            limit: 5,
+            sort: 'most_liked',
+            'note-type': 'image',
+            time: 'last_one_day',
+        });
+
+        expect(page.goto).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({ items: [], page: 1, has_more: false });
+        const filterCalls = page.evaluate.mock.calls.filter(([script]) =>
+            String(script).includes('foundGroup: false, foundTag: false, active: false'));
+        expect(filterCalls.map(([, groupTitle, label]) => [groupTitle, label])).toEqual([
+            ['排序依据', '最多点赞'],
+            ['笔记类型', '图文'],
+            ['发布时间', '一天内'],
+        ]);
+    });
+});
 describe('buildScrollUntilJs', () => {
     it('inlines the target count and default maxScrolls into the generated IIFE', () => {
         const js = buildScrollUntilJs(40);

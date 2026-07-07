@@ -34,7 +34,7 @@ const WAIT_FOR_CONTENT_JS = `
       if (result) { observer.disconnect(); resolve(result); }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => { observer.disconnect(); resolve('timeout'); }, 5000);
+    setTimeout(() => { observer.disconnect(); resolve('timeout'); }, 1000);
   })
 `;
 /**
@@ -289,8 +289,8 @@ export const command = cli({
     ],
     columns: ['rank', 'title', 'author', 'likes', 'published_at', 'url'],
     func: async (page, kwargs) => {
-        const limit = parseLimit(kwargs.limit);
-        const keyword = encodeURIComponent(kwargs.query);
+        const limit = parseLimit(kwargs['limit']);
+        const keyword = encodeURIComponent(kwargs['query']);
         await page.goto(`https://www.xiaohongshu.com/search_result?keyword=${keyword}&source=web_search_result_notes`);
         // Wait for search results to render (or login wall to appear).
         // Uses MutationObserver to resolve as soon as content appears,
@@ -335,6 +335,7 @@ export const command = cli({
 });
 const FILTER_SORT = { general: '综合', latest: '最新', most_liked: '最多点赞', most_commented: '最多评论', most_faved: '最多收藏' };
 const FILTER_TIME = { all: '不限', last_one_day: '一天内', last_one_week: '一周内', last_half_year: '半年内' };
+const FILTER_NOTE_TYPE = { image: '图文', video: '视频' };
 
 export const searchNotesCommand = cli({
     site: 'xiaohongshu',
@@ -355,113 +356,157 @@ export const searchNotesCommand = cli({
     ],
     columns: ['title', 'author', 'likes', 'type', 'url', 'cover'],
     func: async (page, kwargs) => {
-        const pageNum = Math.max(1, Number(kwargs.page ?? 1));
-        const limit = parseLimit(kwargs.limit);
+        const pageNum = Math.max(1, Number(kwargs['page'] ?? 1));
+        const limit = parseLimit(kwargs['limit']);
         const isFirst = pageNum === 1;
 
         async function waitForContent() {
             const r = unwrapEvaluateResult(await page.evaluate(WAIT_FOR_CONTENT_JS));
             if (r === 'login_wall') throw new AuthRequiredError('www.xiaohongshu.com', '搜索需要登录');
         }
+        async function isFilterPanelOpen() {
+            return !!(await page.evaluate(() => {
+                const panel = document.querySelector('.filter-panel');
+                if (!panel) return false;
+                const style = getComputedStyle(panel);
+                if (style.display === 'none' || style.visibility === 'hidden')
+                    return false;
+                const rect = panel.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            }));
+        }
+        async function waitForFilterPanelVisible(timeoutMs = 1200) {
+            return !!(await page.evaluate((timeout) => new Promise((resolve) => {
+                const isOpen = () => {
+                    const panel = document.querySelector('.filter-panel');
+                    if (!panel) return false;
+                    const style = getComputedStyle(panel);
+                    if (style.display === 'none' || style.visibility === 'hidden')
+                        return false;
+                    const rect = panel.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                };
+                if (isOpen()) return resolve(true);
+                const started = Date.now();
+                const tick = () => {
+                    if (isOpen()) return resolve(true);
+                    if (Date.now() - started >= timeout) return resolve(false);
+                    setTimeout(tick, 60);
+                };
+                tick();
+            }), timeoutMs));
+        }
         async function ensureFilterPanel() {
-            const open = await page.evaluate(() => {
-                const p = document.querySelector('.filter-panel');
-                return p && getComputedStyle(p).display !== 'none';
-            });
-            if (open) return;
+            if (await isFilterPanelOpen()) return;
             await page.evaluate(() => {
                 const btn = document.querySelector('.filter');
-                if (btn) btn.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                if (btn)
+                    btn.click();
             });
+            if (await waitForFilterPanelVisible(800)) return;
+            await page.evaluate(() => {
+                const btn = document.querySelector('.filter');
+                if (!btn) return;
+                for (const type of ['mouseenter', 'mouseover', 'mousemove']) {
+                    btn.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+                }
+            });
+            await waitForFilterPanelVisible(1200);
+        }
+        async function applyFilterByGroupTitle(groupTitle, label) {
+            return await page.evaluate((title, wanted) => {
+                const clean = (value) => (value || '').replace(/\s+/g, ' ').trim();
+                const isVisible = (el) => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) return false;
+                    const style = getComputedStyle(el);
+                    return style.display !== 'none' && style.visibility !== 'hidden';
+                };
+                const groups = Array.from(document.querySelectorAll('.filter-panel .filters'));
+                const group = groups.find((node) => {
+                    const heading = Array.from(node.children)
+                        .find((child) => child.tagName === 'SPAN');
+                    return clean(heading?.textContent || '') === title;
+                });
+                if (!group) return { foundGroup: false, foundTag: false, active: false };
+                const container = group.querySelector('.tag-container');
+                if (container) container.scrollIntoView({ block: 'nearest' });
+                const visibleTags = Array.from(group.querySelectorAll('.tags[data-hp-bound], .tags:not([button-hp-installed])'))
+                    .filter((tag) => isVisible(tag));
+                const target = visibleTags.find((tag) => clean(tag.textContent || '') === wanted);
+                if (!target) return { foundGroup: true, foundTag: false, active: false };
+                target.click();
+                const active = visibleTags.find((tag) => tag.classList.contains('active'));
+                return {
+                    foundGroup: true,
+                    foundTag: true,
+                    active: clean(active?.textContent || '') === wanted,
+                };
+            }, groupTitle, label);
+        }
+
+        function closePanel() {
+            return page.evaluate(() => {
+                const btn = document.querySelector('.filter-panel .operation-container .operation[data-hp-bound]');
+                if (btn) btn.click();
+            });
+        }
+
+        if (isFirst) {
+            const kw = String(kwargs['query'] || '').trim();
+            if (!kw) throw new ArgumentError('query is required for page 1');
+
+            const url = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(kw)}&source=web_search_result_notes`;
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
             await page.evaluate(() => new Promise(r => {
                 let t = 0;
                 const c = () => {
-                    const p = document.querySelector('.filter-panel');
-                    if (p && getComputedStyle(p).display !== 'none') return r();
+                    if (document.querySelector('.filter')) return r();
                     if (++t > 20) return r();
                     setTimeout(c, 200);
                 };
                 c();
             }));
-        }
-
-        if (isFirst) {
-            const kw = String(kwargs.query || '').trim();
-            if (!kw) throw new ArgumentError('query is required for page 1');
-
-            const url = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(kw)}&source=web_search_result_notes`;
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-            await waitForContent();
 
             const noteType = String(kwargs['note-type'] || 'all');
-            if (noteType === 'image' || noteType === 'video') {
-                const sel = '#' + noteType + '.channel';
-                await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.click(); }, sel);
-                await waitForContent();
-            }
+            const sort = String(kwargs['sort'] || 'general');
+            const time = String(kwargs['time'] || 'all');
+            const needPanel = (noteType === 'image' || noteType === 'video') || sort !== 'general' || time !== 'all';
 
-            const sort = String(kwargs.sort || 'general');
-            const time = String(kwargs.time || 'all');
-
-            let panelNeedsWait = false;
-
-            if (sort !== 'general') {
+            if (needPanel) {
                 await ensureFilterPanel();
-                panelNeedsWait = true;
-                const label = FILTER_SORT[sort];
-                if (label) {
-                    const pos = await page.evaluate((gi, lbl) => {
-                        const groups = document.querySelectorAll('.filter-panel .filters');
-                        const group = groups[gi];
-                        if (!group) return null;
-                        for (const t of group.querySelectorAll('.tags')) {
-                            const span = t.querySelector('span');
-                            if (!span) continue;
-                            const style = getComputedStyle(t);
-                            if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                            if ((span.textContent || '').trim() === lbl) {
-                                const r = span.getBoundingClientRect();
-                                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                            }
+
+                async function applyOneFilter(groupTitle, label, name) {
+                    for (let i = 0; i < 2; i++) {
+                        await ensureFilterPanel();
+                        const result = await applyFilterByGroupTitle(groupTitle, label);
+                        if (result?.active) return;
+                        if (i === 0 && await isFilterPanelOpen()) {
+                            await closePanel();
                         }
-                        return null;
-                    }, 0, label);
-                    if (pos) {
-                        await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
                     }
+                    throw new CommandExecutionError(`${name}「${label}」筛选失败`);
                 }
+
+                if (sort !== 'general') {
+                    const label = FILTER_SORT[sort];
+                    if (label) await applyOneFilter('排序依据', label, '排序');
+                }
+
+                if (noteType === 'image' || noteType === 'video') {
+                    const ntLabel = FILTER_NOTE_TYPE[noteType];
+                    if (ntLabel) await applyOneFilter('笔记类型', ntLabel, '笔记类型');
+                }
+
+                if (time !== 'all') {
+                    const label = FILTER_TIME[time];
+                    if (label) await applyOneFilter('发布时间', label, '时间');
+                }
+
+                await closePanel();
             }
 
-            if (time !== 'all') {
-                if (!panelNeedsWait) await ensureFilterPanel();
-                panelNeedsWait = true;
-                const label = FILTER_TIME[time];
-                if (label) {
-                    const pos = await page.evaluate((gi, lbl) => {
-                        const groups = document.querySelectorAll('.filter-panel .filters');
-                        const group = groups[gi];
-                        if (!group) return null;
-                        for (const t of group.querySelectorAll('.tags')) {
-                            const span = t.querySelector('span');
-                            if (!span) continue;
-                            const style = getComputedStyle(t);
-                            if (style.display === 'none' || parseFloat(style.opacity) < 0.5) continue;
-                            if ((span.textContent || '').trim() === lbl) {
-                                const r = span.getBoundingClientRect();
-                                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                            }
-                        }
-                        return null;
-                    }, 2, label);
-                    if (pos) {
-                        await page.nativeClick(Math.round(pos.x), Math.round(pos.y));
-                    }
-                }
-            }
-
-            if (panelNeedsWait) {
-                await waitForContent();
-            }
+            await waitForContent();
 
             const seenSet = new Set();
             const allItems = [];
