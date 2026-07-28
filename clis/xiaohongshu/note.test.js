@@ -4,8 +4,12 @@ import { parseNoteId, buildNoteUrl } from './note-helpers.js';
 import './note.js';
 function createPageMock(evaluateResult) {
     return {
+        _page: 'tab-0',
         goto: vi.fn().mockResolvedValue(undefined),
+        newTab: vi.fn().mockResolvedValue('tab-1'),
+        closeTab: vi.fn().mockResolvedValue(undefined),
         evaluate: vi.fn().mockResolvedValue(evaluateResult),
+        hover: vi.fn().mockResolvedValue({ matches_n: 0, match_level: 'exact' }),
         snapshot: vi.fn().mockResolvedValue(undefined),
         click: vi.fn().mockResolvedValue(undefined),
         typeText: vi.fn().mockResolvedValue(undefined),
@@ -81,16 +85,97 @@ describe('xiaohongshu note', () => {
         });
         const signedUrl = 'https://www.xiaohongshu.com/search_result/69c131c9000000002800be4c?xsec_token=abc';
         const result = (await command.func(page, { 'note-id': signedUrl }));
-        expect(page.goto.mock.calls[0][0]).toBe(signedUrl);
+        expect(page.newTab.mock.calls[0][0]).toBe(signedUrl);
         expect(result).toEqual([
             { field: 'title', value: '尚界Z7实车体验' },
             { field: 'author', value: '小红薯用户' },
+            { field: 'author_profile_url', value: '' },
+            { field: 'author_avatar', value: '' },
+            { field: 'author_id', value: '' },
+            { field: 'author_xhs_id', value: '' },
+            { field: 'author_ip', value: '' },
+            { field: 'author_desc', value: '' },
+            { field: 'author_fans', value: '0' },
+            { field: 'author_follows', value: '0' },
+            { field: 'author_interactions', value: '0' },
             { field: 'content', value: '今天去看了实车，外观很帅' },
             { field: 'likes', value: '257' },
             { field: 'collects', value: '98' },
             { field: 'comments', value: '45' },
             { field: 'tags', value: '#尚界Z7, #鸿蒙智行' },
         ]);
+    });
+    it('parses hovercard tooltip-content for author interactions and desc', async () => {
+        const page = createPageMock({
+            loginWall: false,
+            notFound: false,
+            title: '尚界Z7实车体验',
+            desc: '今天去看了实车，外观很帅',
+            author: '小红薯用户',
+            likes: '257',
+            collects: '98',
+            comments: '45',
+            tags: [],
+        });
+        page.evaluate
+            .mockResolvedValueOnce({
+                loginWall: false,
+                notFound: false,
+                title: '尚界Z7实车体验',
+                desc: '今天去看了实车，外观很帅',
+                author: '小红薯用户',
+                likes: '257',
+                collects: '98',
+                comments: '45',
+                tags: [],
+            })
+            .mockResolvedValueOnce({
+                found: true,
+                selector: '[data-opencliHoverTarget="1"]',
+                tag: 'A',
+                className: 'name',
+                href: '/user/profile/661d14a1000000000303190d?channelType=web_user_card_popup_page&xsec_token=AB65s8GlU-iwuBUvgIvtOFh3ouzoPJvqbqUfbH2qkcLVQ%3D&xsec_source=pc_hovercard',
+                text: '活力小珍珠',
+                left: 0,
+                top: 0,
+                width: 0,
+                height: 0,
+                candidates: [
+                    {
+                        selector: '.author-container a.name',
+                        href: '/user/profile/661d14a1000000000303190d?channelType=web_user_card_popup_page&xsec_token=AB65s8GlU-iwuBUvgIvtOFh3ouzoPJvqbqUfbH2qkcLVQ%3D&xsec_source=pc_hovercard',
+                        text: '活力小珍珠',
+                        score: 10,
+                    },
+                ],
+            })
+            .mockResolvedValueOnce({
+                found: true,
+                mode: 'tooltip-content',
+                className: 'tooltip-content',
+                text: '活力小珍珠 57 关注 3984 粉丝 5.6万 获赞与收藏',
+                name: '活力小珍珠',
+                authorId: '661d14a1000000000303190d',
+                xhsId: 'YAYA8101',
+                ip: '',
+                desc: '爱美的材料化学博士一枚，沉迷护肤无法自拔… 成分表在小珍珠这儿没有秘密！！ 始终相信变美是一门科学~',
+                fans: 3984,
+                follows: 57,
+                interactions: 56000,
+                avatar: 'https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo31s5l586flc005pgt2iggu68dprv1d6g?imageView2/2/w/360/format/webp|imageMogr2/strip',
+                profileUrl: '/user/profile/661d14a1000000000303190d?channelType=web_user_card_popup_page&xsec_token=AB65s8GlU-iwuBUvgIvtOFh3ouzoPJvqbqUfbH2qkcLVQ%3D&xsec_source=pc_hovercard',
+        });
+        const result = (await command.func(page, { 'note-id': 'https://www.xiaohongshu.com/search_result/69c131c9000000002800be4c?xsec_token=abc' }));
+        expect(page.hover).toHaveBeenCalled();
+        expect(String(page.hover.mock.calls[0][0])).toContain('data-opencliHoverTarget');
+        expect(result.find((r) => r.field === 'author_profile_url').value).toContain('/user/profile/661d14a1000000000303190d');
+        expect(result.find((r) => r.field === 'author_id').value).toBe('661d14a1000000000303190d');
+        expect(result.find((r) => r.field === 'author_xhs_id').value).toBe('YAYA8101');
+        expect(result.find((r) => r.field === 'author_desc').value).toContain('材料化学博士');
+        expect(result.find((r) => r.field === 'author_fans').value).toBe('3984');
+        expect(result.find((r) => r.field === 'author_follows').value).toBe('57');
+        expect(result.find((r) => r.field === 'author_interactions').value).toBe('56000');
+        expect(result.find((r) => r.field === 'author_panel_mode').value).toBe('tooltip-content');
     });
     it('rejects bare note IDs before browser navigation', async () => {
         const page = createPageMock({
@@ -112,7 +197,7 @@ describe('xiaohongshu note', () => {
         await command.func(page, {
             'note-id': 'https://www.xiaohongshu.com/explore/69c131c9000000002800be4c?xsec_token=abc',
         });
-        expect(page.goto.mock.calls[0][0]).toContain('/explore/69c131c9000000002800be4c');
+        expect(page.newTab.mock.calls[0][0]).toContain('/explore/69c131c9000000002800be4c');
     });
     it('preserves full search_result URL with xsec_token for navigation', async () => {
         const page = createPageMock({
@@ -122,7 +207,7 @@ describe('xiaohongshu note', () => {
         const fullUrl = 'https://www.xiaohongshu.com/search_result/69c131c9000000002800be4c?xsec_token=abc';
         await command.func(page, { 'note-id': fullUrl });
         // Should navigate to the full URL as-is, not strip the token
-        expect(page.goto.mock.calls[0][0]).toBe(fullUrl);
+        expect(page.newTab.mock.calls[0][0]).toBe(fullUrl);
     });
     it('preserves signed /user/profile/<user>/<note> URLs for navigation', async () => {
         const page = createPageMock({
@@ -131,7 +216,7 @@ describe('xiaohongshu note', () => {
         });
         const fullUrl = 'https://www.xiaohongshu.com/user/profile/user123/69c131c9000000002800be4c?xsec_token=abc&xsec_source=pc_user';
         await command.func(page, { 'note-id': fullUrl });
-        expect(page.goto.mock.calls[0][0]).toBe(fullUrl);
+        expect(page.newTab.mock.calls[0][0]).toBe(fullUrl);
     });
     it('throws AuthRequiredError on login wall', async () => {
         const page = createPageMock({ loginWall: true, notFound: false });
@@ -244,6 +329,6 @@ describe('xiaohongshu note', () => {
             'note-id': 'https://www.xiaohongshu.com/search_result/abc123?xsec_token=tok',
         }));
         expect(result.find((r) => r.field === 'tags')).toBeUndefined();
-        expect(result).toHaveLength(6);
+        expect(result).toHaveLength(15);
     });
 });

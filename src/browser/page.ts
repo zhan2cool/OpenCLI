@@ -9,7 +9,7 @@
  * page-scoped operations target the correct page without guessing.
  */
 
-import type { BrowserCookie, BrowserDownloadWaitResult, BrowserEvaluateFunction, ScreenshotOptions } from '../types.js';
+import type { BrowserCookie, BrowserDownloadWaitResult, BrowserEvaluateFunction, EvaluateOptions, ScreenshotOptions } from '../types.js';
 import { sendCommand, sendCommandFull } from './daemon-client.js';
 import { buildEvaluateExpression } from './utils.js';
 import { saveBase64ToFile } from '../utils.js';
@@ -169,14 +169,30 @@ export class Page extends BasePage {
   async evaluate<T = unknown>(js: string): Promise<T>;
   async evaluate<Args extends unknown[], T>(fn: BrowserEvaluateFunction<Args, T>, ...args: Args): Promise<Awaited<T>>;
   async evaluate(input: string | BrowserEvaluateFunction<unknown[], unknown>, ...args: unknown[]): Promise<unknown> {
+    if (typeof input === 'string') {
+      return this.evaluateWithOptions(input);
+    }
     const code = buildEvaluateExpression(input, args);
+    return this.evaluateWithOptions(code, { timeoutSeconds: undefined });
+  }
+
+  async evaluateWithOptions<T = unknown>(js: string, options: EvaluateOptions = {}): Promise<T> {
+    const code = buildEvaluateExpression(js);
     try {
-      return await sendCommand('exec', { code, ...this._cmdOpts() });
+      return await sendCommand('exec', {
+        code,
+        ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
+        ...this._cmdOpts(),
+      }) as T;
     } catch (err) {
       const advice = classifyBrowserError(err);
       if (advice.kind !== 'target-navigation') throw err;
       await new Promise((resolve) => setTimeout(resolve, advice.delayMs));
-      return sendCommand('exec', { code, ...this._cmdOpts() });
+      return sendCommand('exec', {
+        code,
+        ...(options.timeoutSeconds ? { timeout: options.timeoutSeconds } : {}),
+        ...this._cmdOpts(),
+      }) as Promise<T>;
     }
   }
 

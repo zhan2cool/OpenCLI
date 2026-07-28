@@ -265,16 +265,16 @@ async function clickNoteAndExtract(page, noteId) {
   }, noteId);
   if (!clickResult || !clickResult.ok) return null;
   const noteUrl = clickResult.url || `https://www.xiaohongshu.com/explore/${noteId}`;
-  await page.wait(200 + Math.random() * 300);
+  await page.wait(0.3 + Math.random() * 0.4);
   await page.nativeClick(clickResult.x, clickResult.y);
-  await page.wait(1000);
+  await page.wait(1.5);
 
   let hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   if (!hasPopup) {
     const rect = clickResult;
     for (const offset of [{ x: 0, y: -40 }, { x: 40, y: 20 }, { x: -30, y: 30 }]) {
       await page.nativeClick(rect.x + offset.x, rect.y + offset.y);
-      await page.wait(1000);
+      await page.wait(1);
       hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
       if (hasPopup) break;
     }
@@ -285,9 +285,9 @@ async function clickNoteAndExtract(page, noteId) {
       const el = document.querySelector('.tab-content-item, .feeds-container, .main-content');
       if (el) el.scrollBy(0, 250);
     });
-    await page.wait(500);
+    await page.wait(0.5);
     await page.nativeClick(clickResult.x, clickResult.y - 30);
-    await page.wait(1200);
+    await page.wait(1.2);
     hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   }
 
@@ -304,18 +304,18 @@ async function clickNoteAndExtract(page, noteId) {
     }, noteId);
     if (titleRect) {
       await page.nativeClick(titleRect.x, titleRect.y);
-      await page.wait(1500);
+      await page.wait(1.5);
       hasPopup = await page.evaluate(() => !!document.querySelector('#noteContainer'));
     }
   }
 
   if (!hasPopup) {
-    await page.wait(2000);
+    await page.wait(2);
   }
   const detail = await page.evaluate(EXTRACT_NOTE_JS);
   if (!detail) return null;
 
-  await page.wait(200);
+  await page.wait(0.2);
   let stillOpen = await page.evaluate(() => !!document.querySelector('#noteContainer'));
   if (stillOpen) {
     const maskRect = await page.evaluate(() => {
@@ -327,15 +327,8 @@ async function clickNoteAndExtract(page, noteId) {
       return { mw: m.width, mh: m.height, nx: n ? n.left : 0, ny: n ? n.top : 0, nw: n ? n.width : 0 };
     });
     if (maskRect) {
-      const clickX = 20;
-      const clickY = Math.min(maskRect.ny + 50, maskRect.mh - 10);
-      await page.nativeClick(clickX, clickY);
-      await page.wait(400);
-    }
-    stillOpen = await page.evaluate(() => !!document.querySelector('#noteContainer'));
-    if (stillOpen) {
-      await page.evaluate(() => window.dispatchEvent(new PopStateEvent('popstate')));
-      await page.wait(500);
+      await page.nativeClick(20, maskRect.ny + 50);
+      await page.wait(0.4);
       stillOpen = await page.evaluate(() => !!document.querySelector('#noteContainer'));
     }
     if (stillOpen) {
@@ -343,7 +336,7 @@ async function clickNoteAndExtract(page, noteId) {
         const mask = document.querySelector('.note-detail-mask');
         if (mask) mask.click();
       });
-      await page.wait(500);
+      await page.wait(0.5);
     }
   }
 
@@ -377,12 +370,14 @@ export const command = cli({
   browser: true,
   navigateBefore: false,
   args: [
-    { name: 'query', type: 'string', default: '', positional: true, help: '博主名称（第1页必填）' },
+    { name: 'query', type: 'string', default: '', positional: true, help: '博主名称（第1页必填，与 profile-url 二选一）' },
     { name: 'page', type: 'int', default: 1, help: '页码' },
     { name: 'limit', type: 'int', default: 30, help: '每页笔记数' },
     { name: 'author-id', type: 'string', default: '', help: '博主ID（第2+页必填，校验用）' },
     { name: 'xhs-id', type: 'string', default: '', help: '小红书号，提供时与昵称双重校验' },
+    { name: 'profile-url', type: 'string', default: '', help: '博主主页 URL，提供时跳过搜索直接导航' },
     { name: 'detail', type: 'boolean', default: false, help: '是否点开获取笔记详情' },
+    { name: 'timeout', type: 'int', default: 210, help: '命令整体超时秒数（默认 210，内部 +30s padding 实际 240s）' },
   ],
   columns: ['id', 'title', 'type', 'likes', 'collects', 'comments', 'cover', 'url'],
   func: async (page, kwargs) => {
@@ -414,15 +409,33 @@ export const command = cli({
     }
 
     if (isFirst) {
+      const profileUrl = String(kwargs['profile-url'] || '').trim();
       const kw = String(kwargs.query || '').trim();
-      if (!kw) throw new ArgumentError('query is required for page 1');
-      const xhsId = String(kwargs['xhs-id'] || '').trim();
+      if (!profileUrl && !kw) throw new ArgumentError('query or profile-url is required for page 1');
 
-      const matched = await searchAndMatchUser(page, kw, xhsId);
-      if (!matched) throw new EmptyResultError('xiaohongshu author-notes', '博主不存在');
+      let authorId = '';
+      let matched = {};
 
-      const authorId = String(matched.user_id || '').trim();
-      await page.goto(`https://${WEB_HOST}/user/profile/${authorId}`);
+      if (profileUrl) {
+        await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.wait(1.2);
+        const body = await page.evaluate(() => (document.body?.innerText || '').trim().slice(0, 100));
+        if (/登录/.test(body)) throwLoginWall();
+        const urlMatch = profileUrl.match(/\/user\/profile\/([a-f0-9]{24})/i);
+        authorId = urlMatch ? urlMatch[1] : '';
+        if (!authorId) throw new ArgumentError('Invalid profile URL: could not extract author ID');
+      } else {
+        const xhsId = String(kwargs['xhs-id'] || '').trim();
+        matched = await searchAndMatchUser(page, kw, xhsId);
+        if (!matched) throw new EmptyResultError('xiaohongshu author-notes', '博主不存在');
+        authorId = String(matched.user_id || '').trim();
+      }
+
+      const currentUrl = await page.evaluate(() => window.location.href || '');
+      if (!currentUrl.includes(`/user/profile/${authorId}`)) {
+        await page.goto(`https://${WEB_HOST}/user/profile/${authorId}`);
+        await page.wait(1);
+      }
       let snapshot = await readUserSnapshotHydrated(page);
       if (isLoginWallSnapshot(snapshot)) throwLoginWall();
       assertReadableUserSnapshot(snapshot);

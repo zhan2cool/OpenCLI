@@ -5,7 +5,7 @@
  */
 import { cli, Strategy } from '@jackwener/opencli/registry';
 import { AuthRequiredError, CommandExecutionError, EmptyResultError } from '@jackwener/opencli/errors';
-import { NOTE_EXTRACT_JS } from '../xiaohongshu/note.js';
+import { NOTE_EXTRACT_JS, collectAuthorHoverCardData } from '../xiaohongshu/note.js';
 import { buildNoteUrl, parseNoteId } from '../xiaohongshu/note-helpers.js';
 
 const REDNOTE_SIGNED_URL_HINT = 'Pass a full rednote.com note URL with xsec_token from search results or user/profile context.';
@@ -52,9 +52,15 @@ cli({
         if (!d.title && !d.author) {
             throw new EmptyResultError('rednote/note', 'The note page loaded without visible content. The note may be deleted or restricted.');
         }
+        const { hoverCardData } = await collectAuthorHoverCardData(page);
         const rows = [
             { field: 'title', value: d.title || '' },
             { field: 'author', value: d.author || '' },
+            { field: 'author_id', value: d.authorId || '' },
+            { field: 'author_desc', value: (hoverCardData && hoverCardData.desc) || d.authorDesc || '' },
+            { field: 'author_fans', value: String((hoverCardData && hoverCardData.fans) || d.authorFans || 0) },
+            { field: 'author_follows', value: String((hoverCardData && hoverCardData.follows) || d.authorFollows || 0) },
+            { field: 'author_interactions', value: String((hoverCardData && hoverCardData.interactions) || d.authorInteractions || 0) },
             { field: 'content', value: d.desc || '' },
             { field: 'likes', value: numOrZero(d.likes || '') },
             { field: 'collects', value: numOrZero(d.collects || '') },

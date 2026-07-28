@@ -8,6 +8,33 @@ export function parseNoteId(input) {
     return match ? (match[1] || match[2]) : trimmed;
 }
 
+export function parseXhsProfileHref(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+    const match = raw.match(/(?:^https?:\/\/www\.(?:xiaohongshu|rednote)\.com)?\/user\/profile\/([^/?#]+)/i);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
+export function buildXhsProfileUrl(input, hostname = 'www.xiaohongshu.com') {
+    const userId = parseXhsProfileHref(input);
+    if (!userId) return '';
+    const normalizedHost = String(hostname || '').trim().toLowerCase();
+    if (!/^www\.(xiaohongshu|rednote)\.com$/.test(normalizedHost)) return '';
+    if (/^https?:\/\//i.test(String(input || '').trim())) {
+        try {
+            const url = new URL(String(input).trim());
+            if (url.protocol !== 'https:') return '';
+            if (url.hostname.toLowerCase() !== normalizedHost) return '';
+            if (!/^\/user\/profile\/[^/?#]+\/?$/.test(url.pathname)) return '';
+        } catch {
+            return '';
+        }
+    } else if (!/^\/user\/profile\/[^/?#]+\/?$/.test(String(input || '').trim())) {
+        return '';
+    }
+    return `https://${normalizedHost}/user/profile/${encodeURIComponent(userId)}`;
+}
+
 export const XHS_SIGNED_URL_HINT = 'Pass a full Xiaohongshu note URL with xsec_token from search results or user/profile context.';
 
 function isShortLink(input) {
@@ -39,6 +66,7 @@ function isSupportedNotePath(pathname) {
 export function buildNoteUrl(input, options = {}) {
     const {
         allowShortLink = false,
+        allowUnsignedFallback = false,
         commandName = 'xiaohongshu note',
         cookieRoot = 'xiaohongshu.com',
         signedUrlHint = XHS_SIGNED_URL_HINT,
@@ -61,9 +89,18 @@ export function buildNoteUrl(input, options = {}) {
             if (isHostMatch(url.hostname, cookieRoot) && isSupportedNotePath(url.pathname) && xsecToken) {
                 return trimmed;
             }
+            if (allowUnsignedFallback && isHostMatch(url.hostname, cookieRoot) && isSupportedNotePath(url.pathname)) {
+                return trimmed;
+            }
         }
         catch { }
         throw new ArgumentError(message, hint);
+    }
+    if (allowUnsignedFallback) {
+        const noteId = parseNoteId(trimmed);
+        if (/^[a-f0-9]{18,24}$/i.test(noteId)) {
+            return `https://www.${cookieRoot}/explore/${noteId}`;
+        }
     }
     throw new ArgumentError(message, hint);
 }

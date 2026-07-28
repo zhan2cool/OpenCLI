@@ -40477,7 +40477,7 @@
         "default": "",
         "required": false,
         "positional": true,
-        "help": "博主名称（第1页必填）"
+        "help": "博主名称（第1页必填，与 profile-url 二选一）"
       },
       {
         "name": "page",
@@ -40508,11 +40508,25 @@
         "help": "小红书号，提供时与昵称双重校验"
       },
       {
+        "name": "profile-url",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "博主主页 URL，提供时跳过搜索直接导航"
+      },
+      {
         "name": "detail",
         "type": "boolean",
         "default": false,
         "required": false,
         "help": "是否点开获取笔记详情"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 210,
+        "required": false,
+        "help": "命令整体超时秒数（默认 210，内部 +30s padding 实际 240s）"
       }
     ],
     "columns": [
@@ -40528,53 +40542,6 @@
     "type": "js",
     "modulePath": "xiaohongshu/author-notes.js",
     "sourceFile": "xiaohongshu/author-notes.js",
-    "navigateBefore": false
-  },
-  {
-    "site": "xiaohongshu",
-    "name": "comments",
-    "description": "获取小红书笔记评论（支持楼中楼子回复）",
-    "access": "read",
-    "domain": "www.xiaohongshu.com",
-    "strategy": "cookie",
-    "browser": true,
-    "args": [
-      {
-        "name": "note-id",
-        "type": "str",
-        "required": true,
-        "positional": true,
-        "help": "Full Xiaohongshu note URL with xsec_token"
-      },
-      {
-        "name": "limit",
-        "type": "int",
-        "default": 20,
-        "required": false,
-        "help": "Number of top-level comments (max 50)"
-      },
-      {
-        "name": "with-replies",
-        "type": "boolean",
-        "default": false,
-        "required": false,
-        "help": "Include nested replies (楼中楼)"
-      }
-    ],
-    "columns": [
-      "rank",
-      "author",
-      "userId",
-      "profileUrl",
-      "text",
-      "likes",
-      "time",
-      "is_reply",
-      "reply_to"
-    ],
-    "type": "js",
-    "modulePath": "xiaohongshu/comments.js",
-    "sourceFile": "xiaohongshu/comments.js",
     "navigateBefore": false
   },
   {
@@ -41095,6 +41062,69 @@
     "type": "js",
     "modulePath": "xiaohongshu/note.js",
     "sourceFile": "xiaohongshu/note.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "xiaohongshu",
+    "name": "note-comments",
+    "description": "一次打开页面获取小红书笔记摘要和分页评论",
+    "access": "read",
+    "domain": "www.xiaohongshu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "note-id",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "Full Xiaohongshu note URL or bare note ID"
+      },
+      {
+        "name": "page-size",
+        "type": "int",
+        "default": 100,
+        "required": false,
+        "help": "Top-level comments per page"
+      },
+      {
+        "name": "page",
+        "type": "int",
+        "default": 1,
+        "required": false,
+        "help": "Top-level comment page number"
+      },
+      {
+        "name": "expand-replies",
+        "type": "boolean",
+        "default": true,
+        "required": false,
+        "help": "Include nested replies"
+      },
+      {
+        "name": "max-scroll-rounds",
+        "type": "int",
+        "default": 6,
+        "required": false,
+        "help": "Maximum comment-area scroll rounds"
+      },
+      {
+        "name": "expand-rounds",
+        "type": "int",
+        "default": 3,
+        "required": false,
+        "help": "Maximum reply-expansion rounds"
+      }
+    ],
+    "columns": [
+      "note_id",
+      "title",
+      "author",
+      "comments"
+    ],
+    "type": "js",
+    "modulePath": "xiaohongshu/note-comments.js",
+    "sourceFile": "xiaohongshu/note-comments.js",
     "navigateBefore": false
   },
   {

@@ -57,6 +57,8 @@ export interface DaemonCommand {
   text?: string;
   /** URL substring filter pattern for network capture */
   pattern?: string;
+  /** Command timeout in seconds. */
+  timeout?: number;
   /** Download wait timeout in milliseconds */
   timeoutMs?: number;
   cdpMethod?: string;
@@ -126,12 +128,15 @@ async function sendCommandRaw(
     const contextId = params.contextId ?? resolveProfileContextId();
     const windowMode = params.windowMode ?? envWindowMode;
     const command: DaemonCommand = { id, action, ...params, ...(contextId && { contextId }), ...(windowMode && { windowMode }) };
+    const clientTimeoutMs = typeof params.timeout === 'number' && params.timeout > 0
+      ? Math.max(30_000, params.timeout * 1000 + 5_000)
+      : 30_000;
     try {
       const res = await requestDaemon('/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(command),
-        timeout: 30000,
+        timeout: clientTimeoutMs,
       });
 
       const result = (await res.json()) as DaemonResult;
