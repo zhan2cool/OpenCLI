@@ -40971,6 +40971,122 @@
   },
   {
     "site": "xiaohongshu",
+    "name": "hot-notes",
+    "description": "逐个关键词挖掘爆款小红书笔记，只返回命中条件的结果",
+    "access": "read",
+    "domain": "www.xiaohongshu.com",
+    "strategy": "cookie",
+    "browser": true,
+    "args": [
+      {
+        "name": "keywords",
+        "type": "str",
+        "required": true,
+        "positional": true,
+        "help": "多个关键词，支持用逗号、分号或换行分隔"
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "default": "",
+        "required": false,
+        "help": "分页游标，留空表示从头开始"
+      },
+      {
+        "name": "timeout",
+        "type": "int",
+        "default": 210,
+        "required": false,
+        "help": "命令整体超时秒数（默认 210，内部 +30s padding）"
+      },
+      {
+        "name": "scan-limit",
+        "type": "int",
+        "default": 50,
+        "required": false,
+        "help": "每个关键词最多扫描多少条搜索结果"
+      },
+      {
+        "name": "hit-limit",
+        "type": "int",
+        "default": 20,
+        "required": false,
+        "help": "最终最多返回多少条命中结果"
+      },
+      {
+        "name": "likes-min",
+        "type": "int",
+        "default": 500,
+        "required": false,
+        "help": "点赞下限"
+      },
+      {
+        "name": "collects-min",
+        "type": "int",
+        "default": 0,
+        "required": false,
+        "help": "收藏下限"
+      },
+      {
+        "name": "fans-min",
+        "type": "int",
+        "default": 0,
+        "required": false,
+        "help": "作者粉丝下限"
+      },
+      {
+        "name": "fans-max",
+        "type": "int",
+        "default": 10000,
+        "required": false,
+        "help": "作者粉丝上限（0 表示不限制）"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "default": "most_liked",
+        "required": false,
+        "help": "排序: most_liked/most_faved"
+      },
+      {
+        "name": "note-type",
+        "type": "string",
+        "default": "all",
+        "required": false,
+        "help": "笔记类型: all/image/video"
+      },
+      {
+        "name": "time",
+        "type": "string",
+        "default": "last_one_week",
+        "required": false,
+        "help": "发布时间: all/last_one_day/last_one_week/last_half_year"
+      },
+      {
+        "name": "pause-seconds",
+        "type": "float",
+        "default": 2,
+        "required": false,
+        "help": "每个关键词执行完后的停顿秒数"
+      }
+    ],
+    "columns": [
+      "keyword",
+      "title",
+      "author_name",
+      "likes",
+      "collects",
+      "author_fans",
+      "published_at",
+      "url"
+    ],
+    "type": "js",
+    "modulePath": "xiaohongshu/hot-notes.js",
+    "sourceFile": "xiaohongshu/hot-notes.js",
+    "navigateBefore": false
+  },
+  {
+    "site": "xiaohongshu",
     "name": "liked",
     "description": "小红书赞过笔记列表",
     "access": "read",
