@@ -160,8 +160,11 @@ describe('xiaohongshu note', () => {
                 ip: '',
                 desc: '爱美的材料化学博士一枚，沉迷护肤无法自拔… 成分表在小珍珠这儿没有秘密！！ 始终相信变美是一门科学~',
                 fans: 3984,
-                follows: 57,
+                following: 57,
                 interactions: 56000,
+                hasFollowingMetric: true,
+                hasFansMetric: true,
+                hasInteractionsMetric: true,
                 avatar: 'https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo31s5l586flc005pgt2iggu68dprv1d6g?imageView2/2/w/360/format/webp|imageMogr2/strip',
                 profileUrl: '/user/profile/661d14a1000000000303190d?channelType=web_user_card_popup_page&xsec_token=AB65s8GlU-iwuBUvgIvtOFh3ouzoPJvqbqUfbH2qkcLVQ%3D&xsec_source=pc_hovercard',
         });

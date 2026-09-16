@@ -389,9 +389,53 @@ export const HOVERCARD_EXTRACT_JS = `
         const statsText = textOf(container);
         const nameText = textOf(basicInfo).split(' ')[0] || '';
 
-        const followingMatch = statsText.match(/([\\d,.]+[wW万]?)\\s*关注/);
-        const fansMatch = statsText.match(/([\\d,.]+[wW万]?)\\s*粉丝/);
-        const interactionsMatch = statsText.match(/([\\d,.]+[wW万]?)\\s*获赞与收藏/);
+        const metricPattern = (label) => new RegExp('([\\\\d,.]+[wW万]?)\\\\s*' + label);
+        const metricPatterns = (label) => [
+          metricPattern(label),
+          new RegExp(label + '\\\\s*([\\\\d,.]+[wW万]?)'),
+        ];
+        const extractMetric = (label) => {
+          const directMatches = metricPatterns(label)
+            .map((pattern) => statsText.match(pattern))
+            .filter(Boolean);
+          if (directMatches.length) return directMatches[0]?.[1] || '';
+
+          const snippets = [];
+          const pushSnippet = (value) => {
+            const text = textOf(value);
+            if (text) snippets.push(text);
+          };
+          const pushNodeText = (node) => {
+            const text = String(node?.textContent || '').replace(/\\s+/g, ' ').trim();
+            if (text) snippets.push(text);
+          };
+
+          for (const el of Array.from(container.querySelectorAll('*'))) {
+            const text = textOf(el);
+            if (!text || !text.includes(label)) continue;
+            pushSnippet(el);
+            pushSnippet(el.previousElementSibling);
+            pushSnippet(el.nextElementSibling);
+            pushSnippet(el.parentElement);
+            pushSnippet(el.parentElement?.previousElementSibling);
+            pushSnippet(el.parentElement?.nextElementSibling);
+            pushSnippet(el.parentElement?.parentElement);
+            pushNodeText(el.previousSibling);
+            pushNodeText(el.nextSibling);
+          }
+
+          for (const snippet of snippets) {
+            for (const pattern of metricPatterns(label)) {
+              const match = snippet.match(pattern);
+              if (match?.[1]) return match[1];
+            }
+          }
+          return '';
+        };
+
+        const followingRaw = extractMetric('关注');
+        const fansRaw = extractMetric('粉丝');
+        const interactionsRaw = extractMetric('获赞与收藏');
         const authorIdMatch = (profileLinkEl?.getAttribute?.('href') || '').match(/\\/user\\/profile\\/([^/?#]+)/);
         const xhsIdMatch = fullText.match(/小红书号[：:\\s]*([A-Za-z0-9_-]+)/);
         const ipMatch = fullText.match(/IP属地[：:\\s]*([^\\s]+)/);
@@ -406,9 +450,12 @@ export const HOVERCARD_EXTRACT_JS = `
           xhsId: xhsIdMatch?.[1] || '',
           ip: ipMatch?.[1] || '',
           desc: descText,
-          following: parseNum(followingMatch?.[1] || ''),
-          fans: parseNum(fansMatch?.[1] || ''),
-          interactions: parseNum(interactionsMatch?.[1] || ''),
+          hasFollowingMetric: Boolean(followingRaw),
+          hasFansMetric: Boolean(fansRaw),
+          hasInteractionsMetric: Boolean(interactionsRaw),
+          following: parseNum(followingRaw),
+          fans: parseNum(fansRaw),
+          interactions: parseNum(interactionsRaw),
           avatar: avatarEl?.getAttribute?.('src') || avatarEl?.getAttribute?.('data-src') || '',
           profileUrl: profileLinkEl?.getAttribute?.('href') || '',
           left: Math.round(root.getBoundingClientRect().left),
@@ -439,6 +486,56 @@ async function waitForHoverCard(page, attempts = 12, delayMs = 180) {
         await page.wait({ time: delayMs / 1000 });
     }
     return hoverCardData;
+}
+
+function isHoverCardDataReady(data) {
+    if (!data?.found) return false;
+    const hasCoreIdentity = Boolean(data.name || data.profileUrl || data.authorId);
+    const hasFollowingMetric = Boolean(data.hasFollowingMetric);
+    const hasOtherMetrics = Boolean(data.hasFansMetric) || Boolean(data.hasInteractionsMetric);
+    return hasCoreIdentity && hasFollowingMetric && hasOtherMetrics;
+}
+
+function hoverCardSignature(data) {
+    if (!data?.found) return 'missing';
+    return JSON.stringify({
+        mode: data.mode || '',
+        name: data.name || '',
+        xhsId: data.xhsId || '',
+        desc: data.desc || '',
+        following: data.following || 0,
+        fans: data.fans || 0,
+        interactions: data.interactions || 0,
+        hasFollowingMetric: Boolean(data.hasFollowingMetric),
+        hasFansMetric: Boolean(data.hasFansMetric),
+        hasInteractionsMetric: Boolean(data.hasInteractionsMetric),
+        profileUrl: data.profileUrl || '',
+    });
+}
+
+async function waitForStableHoverCard(page, attempts = 16, delayMs = 220, stableMatches = 2) {
+    let last = null;
+    let lastSignature = '';
+    let stableCount = 0;
+    for (let i = 0; i < attempts; i += 1) {
+        const current = await page.evaluate(HOVERCARD_EXTRACT_JS);
+        if (current?.found) {
+            const signature = hoverCardSignature(current);
+            if (signature === lastSignature) {
+                stableCount += 1;
+            } else {
+                stableCount = 1;
+                lastSignature = signature;
+                last = current;
+            }
+            if (isHoverCardDataReady(current) && stableCount >= stableMatches) {
+                return current;
+            }
+            last = current;
+        }
+        await page.wait({ time: delayMs / 1000 });
+    }
+    return last;
 }
 
 async function resolveAuthorHoverTarget(page, hint = {}) {
@@ -517,7 +614,7 @@ async function triggerAuthorHover(page, hint = {}) {
     }
     try {
         await page.hover(target.selector);
-        await page.wait({ time: 0.8 });
+        await page.wait({ time: 0.35 });
         return { ok: true, selector: target.selector, attempts };
     } catch (e) {
         attempts.push(`hover failed: ${(e?.message || e).toString().slice(0, 120)}`);
@@ -525,19 +622,36 @@ async function triggerAuthorHover(page, hint = {}) {
     }
 }
 
+async function waitForPreferredHoverCard(page, cycle = 0) {
+    const attempts = cycle === 0 ? 8 : 10;
+    const delayMs = cycle === 0 ? 150 : 180;
+    return waitForStableHoverCard(page, attempts, delayMs, 1);
+}
+
 export async function collectAuthorHoverCardData(page, hint = {}) {
     const debugParts = [];
     let hoverCardData = null;
+    let hoverComplete = false;
     try {
-        const hoverResult = await triggerAuthorHover(page, hint);
-        debugParts.push(`hover-target=${hoverResult.ok ? hoverResult.selector : 'none'}`);
-        hoverCardData = await waitForHoverCard(page);
-        debugParts.push(`hover=${hoverCardData ? (hoverCardData.found ? hoverCardData.mode : 'not found') : 'null'}`);
+        for (let cycle = 0; cycle < 3; cycle += 1) {
+            const hoverResult = await triggerAuthorHover(page, hint);
+            debugParts.push(`hover-target[${cycle + 1}]=${hoverResult.ok ? hoverResult.selector : 'none'}`);
+            hoverCardData = await waitForPreferredHoverCard(page, cycle);
+            hoverComplete = isHoverCardDataReady(hoverCardData);
+            debugParts.push(`hover[${cycle + 1}]=${hoverCardData ? (hoverCardData.found ? hoverCardData.mode : 'not found') : 'null'}`);
+            debugParts.push(`hover-ready[${cycle + 1}]=${hoverComplete ? 'yes' : 'no'}`);
+            debugParts.push(`hover-follows[${cycle + 1}]=${hoverCardData?.following || 0}`);
+            debugParts.push(`hover-fans[${cycle + 1}]=${hoverCardData?.fans || 0}`);
+            debugParts.push(`hover-interactions[${cycle + 1}]=${hoverCardData?.interactions || 0}`);
+            if (hoverComplete) break;
+            await page.wait({ time: 0.25 });
+        }
     } catch (e) {
         debugParts.push(`hover error=${(e?.message || e).toString().slice(0, 120)}`);
     }
     return {
         hoverCardData: hoverCardData?.found ? hoverCardData : null,
+        hoverComplete,
         hoverDebug: debugParts.join(' | '),
     };
 }
@@ -604,7 +718,7 @@ export const command = cli({
                 { field: 'author_ip', value: (hoverCardData && hoverCardData.ip) || '' },
                 { field: 'author_desc', value: (hoverCardData && hoverCardData.desc) || '' },
                 { field: 'author_fans', value: String((hoverCardData && hoverCardData.fans) || 0) },
-                { field: 'author_follows', value: String((hoverCardData && hoverCardData.follows) || 0) },
+                { field: 'author_follows', value: String((hoverCardData && hoverCardData.following) || 0) },
                 { field: 'author_interactions', value: String((hoverCardData && hoverCardData.interactions) || 0) },
                 { field: 'content', value: d.desc || '' },
                 { field: 'likes', value: numOrZero(d.likes || '') },
